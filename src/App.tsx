@@ -204,14 +204,14 @@ export default function App() {
   };
 
   return (
-    <div id="app-viewport" className="min-h-screen bg-[#131212] text-[#e5e2e1] flex flex-col items-center">
+    <div id="app-viewport" className="min-h-screen bg-[#f3f4f6] text-on-surface flex flex-col items-center">
       {/* Container wrapper mimicking clean mobile bento proportions */}
-      <div id="mobile-container-frame" className="w-full max-w-2xl bg-[#131313] min-h-screen shadow-2xl relative flex flex-col pb-32">
+      <div id="mobile-container-frame" className="w-full max-w-2xl bg-white min-h-screen shadow-lg relative flex flex-col pb-32 border-x border-outline-variant">
         
         {/* Top AppBar */}
-        <header id="main-topbar" className="sticky top-0 w-full z-40 flex justify-between items-center px-6 h-18 bg-[#1c1b1b] border-b border-[#333]/30 backdrop-blur-md">
+        <header id="main-topbar" className="sticky top-0 w-full z-40 flex justify-between items-center px-6 h-18 bg-white border-b border-outline-variant/30 backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#c3f400]">
+            <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary">
               <img 
                 id="avatar-image"
                 alt="Profile Avatar" 
@@ -224,7 +224,7 @@ export default function App() {
               />
             </div>
             <div>
-              <h1 className="text-base font-bold text-[#c3f400]">Fome Zero</h1>
+              <h1 className="text-base font-bold text-primary">Fome Zero</h1>
               <p className="text-[10px] text-on-surface-variant font-mono font-bold leading-none uppercase">
                 {activeActor === 'ong' ? 'Voluntariado' : activeActor === 'supermercado' ? 'Estabelecimento' : 'Matching de IA'}
               </p>
@@ -236,9 +236,9 @@ export default function App() {
             <button
               id="header-switch-role-btn"
               onClick={() => handleActorSwitch(activeActor === 'ong' ? 'supermercado' : activeActor === 'supermercado' ? 'ia' : 'ong')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2a2a2a] hover:bg-[#333] transition-colors rounded-full border border-outline-variant/10 text-xs font-semibold text-on-surface cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-low hover:bg-surface-container-highest transition-colors rounded-full border border-outline-variant/30 text-xs font-semibold text-on-surface cursor-pointer"
             >
-              <ArrowRightLeft className="w-3.5 h-3.5 text-[#c3f400]" />
+              <ArrowRightLeft className="w-3.5 h-3.5 text-primary" />
               <span>Trocar Perfil</span>
             </button>
             
@@ -249,27 +249,27 @@ export default function App() {
         </header>
 
         {/* Floating Context Info bar */}
-        <div id="context-info-bar" className="bg-[#c3f400]/10 border-b border-[#c3f400]/25 px-6 py-2.5 flex items-center justify-between text-xs font-medium">
+        <div id="context-info-bar" className="bg-primary-container/20 border-b border-primary-container/40 px-6 py-2.5 flex items-center justify-between text-xs font-medium">
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-[#c3f400]">Modo de Análise Ativo</span>
+            <span className="text-primary font-bold">Modo de Análise Ativo</span>
           </div>
           <div className="flex items-center gap-3">
             <span 
               onClick={() => handleActorSwitch('ong')} 
-              className={`cursor-pointer transition-all ${activeActor === 'ong' ? 'text-white border-b-2 border-[#c3f400] font-bold' : 'text-on-surface-variant'}`}
+              className={`cursor-pointer transition-all pb-1 ${activeActor === 'ong' ? 'text-primary border-b-2 border-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
             >
               Sou ONG
             </span>
             <span 
               onClick={() => handleActorSwitch('supermercado')} 
-              className={`cursor-pointer transition-all ${activeActor === 'supermercado' ? 'text-white border-b-2 border-[#c3f400] font-bold' : 'text-on-surface-variant'}`}
+              className={`cursor-pointer transition-all pb-1 ${activeActor === 'supermercado' ? 'text-primary border-b-2 border-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
             >
               Sou Doador
             </span>
             <span 
               onClick={() => handleActorSwitch('ia')} 
-              className={`cursor-pointer transition-all ${activeActor === 'ia' ? 'text-white border-b-2 border-[#c3f400] font-bold' : 'text-on-surface-variant'}`}
+              className={`cursor-pointer transition-all pb-1 ${activeActor === 'ia' ? 'text-primary border-b-2 border-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
             >
               Painel IA
             </span>
@@ -277,7 +277,7 @@ export default function App() {
         </div>
 
         {/* Main Content Area */}
-        <main className="flex-1 p-6 space-y-6">
+        <main className="flex-1 p-6 space-y-6 bg-white">
           {activeActor === 'ong' ? (
             <NgoView 
               alimentos={alimentos}
@@ -302,14 +302,14 @@ export default function App() {
         </main>
 
         {/* Permanent Bottom Navigation Bar mimicking Screen flows */}
-        <nav id="permanent-bottom-nav" className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto z-40 flex justify-around items-center px-4 py-3 pb-safe bg-[#1c1b1b] border-t border-[#333]/30 rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.15)]">
+        <nav id="permanent-bottom-nav" className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto z-40 flex justify-around items-center px-4 py-3 pb-safe bg-white border-t border-outline-variant/30 rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
           <button
             id="nav-ong-btn"
             onClick={() => handleActorSwitch('ong')}
             className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
               activeActor === 'ong' 
-                ? 'bg-[#c3f400] text-[#161e00] font-bold scale-105 px-5' 
-                : 'text-on-surface-variant hover:text-white'
+                ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
+                : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             <Layers className="w-5 h-5 mb-0.5" />
@@ -321,8 +321,8 @@ export default function App() {
             onClick={() => handleActorSwitch('ia')}
             className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
               activeActor === 'ia' 
-                ? 'bg-[#c3f400] text-[#161e00] font-bold scale-105 px-5' 
-                : 'text-on-surface-variant hover:text-white'
+                ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
+                : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             <Sparkles className="w-5 h-5 mb-0.5" />
@@ -334,8 +334,8 @@ export default function App() {
             onClick={() => handleActorSwitch('supermercado')}
             className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
               activeActor === 'supermercado' 
-                ? 'bg-[#c3f400] text-[#161e00] font-bold scale-105 px-5' 
-                : 'text-on-surface-variant hover:text-white'
+                ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
+                : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             <Award className="w-5 h-5 mb-0.5" />

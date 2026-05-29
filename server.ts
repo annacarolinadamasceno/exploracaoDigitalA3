@@ -67,46 +67,53 @@ Gere a melhor correspondência possível maximizando o atendimento das ONGs prio
         systemInstruction: "Você é o Agente de IA do Fome Zero. Analise os inventários de supermercados, cruze-os com a fila de necessidades de ONGs priorizando o maior tempo registrado sem doação, e cruze alimentos por categorias lógicas.",
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              nome_ong: {
-                type: Type.STRING,
-                description: "O nome exato da ONG atendida"
-              },
-              motivo_prioridade: {
-                type: Type.STRING,
-                description: "Justificativa detalhada de priorização baseada nas regras de negócio (tempo desde a última doação recebida e correspondência lógica de alimento)."
-              },
-              itens_atendidos: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    alimento_oferecido: {
-                      type: Type.STRING,
-                      description: "O alimento do supermercado oferecido"
-                    },
-                    categoria_correspondida: {
-                      type: Type.STRING,
-                      description: "A categoria lógica correspondida"
-                    },
-                    quantidade: {
-                      type: Type.STRING,
-                      description: "A quantidade recomendada a ser recolhida"
+          type: Type.OBJECT,
+          properties: {
+            matches: {
+              type: Type.ARRAY,
+              description: "Lista de correspondências inteligentes",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  nome_ong: {
+                    type: Type.STRING,
+                    description: "O nome exato da ONG atendida"
+                  },
+                  motivo_prioridade: {
+                    type: Type.STRING,
+                    description: "Justificativa detalhada de priorização baseada nas regras de negócio (tempo desde a última doação recebida e correspondência lógica de alimento)."
+                  },
+                  itens_atendidos: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        alimento_oferecido: {
+                          type: Type.STRING,
+                          description: "O alimento do supermercado oferecido"
+                        },
+                        categoria_correspondida: {
+                          type: Type.STRING,
+                          description: "A categoria lógica correspondida"
+                        },
+                        quantidade: {
+                          type: Type.STRING,
+                          description: "A quantidade recomendada a ser recolhida"
+                        }
+                      },
+                      required: ["alimento_oferecido", "categoria_correspondida", "quantidade"]
                     }
                   },
-                  required: ["alimento_oferecido", "categoria_correspondida", "quantidade"]
-                }
-              },
-              nivel_urgencia: {
-                type: Type.STRING,
-                description: "Nível de urgência calculado (Crítico, Alto, Médio, Baixo)"
+                  nivel_urgencia: {
+                    type: Type.STRING,
+                    description: "Nível de urgência calculado (Crítico, Alto, Médio, Baixo)"
+                  }
+                },
+                required: ["nome_ong", "motivo_prioridade", "itens_atendidos", "nivel_urgencia"]
               }
-            },
-            required: ["nome_ong", "motivo_prioridade", "itens_atendidos", "nivel_urgencia"]
-          }
+            }
+          },
+          required: ["matches"]
         }
       }
     });
@@ -117,7 +124,7 @@ Gere a melhor correspondência possível maximizando o atendimento das ONGs prio
     }
 
     const parsedData = JSON.parse(textOutput.trim());
-    return res.json({ matches: parsedData, simulated: false });
+    return res.json({ matches: parsedData.matches || parsedData, simulated: false });
 
   } catch (err: any) {
     console.error("Erro no processamento da IA:", err);
