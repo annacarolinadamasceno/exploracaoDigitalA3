@@ -3,24 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Heart, 
   MapPin, 
-  Users, 
   Sparkles, 
-  User, 
+  LogOut,
   Calendar,
   Layers,
-  Activity,
   Award,
-  BookOpen,
-  ArrowRightLeft
+  PlusCircle,
+  FileText,
+  UserCheck
 } from 'lucide-react';
 import { Alimento, Ong, ColetaAtiva } from './types';
 import NgoView from './components/NgoView';
 import SupermarketView from './components/SupermarketView';
-import AIMatcher from './components/AIMatcher';
+import AuthView from './components/AuthView';
 
 // Mock initial foods
 const INITIAL_ALIMENTOS: Alimento[] = [
@@ -30,8 +29,8 @@ const INITIAL_ALIMENTOS: Alimento[] = [
     categoria: 'Padaria',
     quantidade: 15,
     unidade: 'un',
-    validade: '24/10',
-    status: 'Aguardando Coleta',
+    validade: '2026-06-02',
+    status: 'Pendente',
     tempoExpiraHora: 4,
     doador: 'Supermercado Silva',
     distanciaKm: 1.2,
@@ -43,7 +42,7 @@ const INITIAL_ALIMENTOS: Alimento[] = [
     categoria: 'Laticínios',
     quantidade: 48,
     unidade: 'un',
-    validade: '30/11',
+    validade: '2026-06-15',
     status: 'Coletado',
     tempoExpiraHora: 12,
     doador: 'Express Market',
@@ -56,8 +55,8 @@ const INITIAL_ALIMENTOS: Alimento[] = [
     categoria: 'Proteína Animal',
     quantidade: 10,
     unidade: 'dz',
-    validade: '22/10',
-    status: 'Aguardando Coleta',
+    validade: '2026-06-05',
+    status: 'Pendente',
     tempoExpiraHora: 2,
     doador: 'Mercado do Porto',
     distanciaKm: 0.8,
@@ -69,7 +68,7 @@ const INITIAL_ALIMENTOS: Alimento[] = [
     categoria: 'Frutas',
     quantidade: 20,
     unidade: 'kg',
-    validade: '28/10',
+    validade: '2026-06-01',
     status: 'Pendente',
     tempoExpiraHora: 4,
     doador: 'Supermercado Silva',
@@ -78,13 +77,13 @@ const INITIAL_ALIMENTOS: Alimento[] = [
   }
 ];
 
-// Mock priority queue for ONGs
+// Mock initial ONGs and needs
 const INITIAL_ONGS: Ong[] = [
   {
     id: 'ong_1',
     nome: 'ONG Mesa Unida',
     necessidades: ['Padaria', 'Frutas'],
-    tempoSemDoacaoDias: 20, // Older, highest priority
+    tempoSemDoacaoDias: 20, // Oldest, highest priority
     ultimaDoacao: '02/05/2026',
     nivelUrgencia: 'Crítico',
     tempoSegundosSimulado: 1728000,
@@ -112,54 +111,149 @@ const INITIAL_ONGS: Ong[] = [
   }
 ];
 
+// Silent matching algorithm that mimics backend API structure locally
+function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[] {
+  const sortedOngs = [...ongsList].sort((a, b) => b.tempoSemDoacaoDias - a.tempoSemDoacaoDias);
+  const results: any[] = [];
+  const usedAlimentos = new Set<string>();
+
+  for (const ong of sortedOngs) {
+    const items: any[] = [];
+    for (const item of alimentosList) {
+      if (item.status !== 'Pendente') continue;
+      if (usedAlimentos.has(item.id)) continue;
+
+      let ok = false;
+      for (const req of ong.necessidades) {
+        if (
+          item.categoria.toLowerCase().includes(req.toLowerCase()) ||
+          req.toLowerCase().includes(item.categoria.toLowerCase()) ||
+          item.nome.toLowerCase().includes(req.toLowerCase())
+        ) {
+          ok = true;
+          break;
+        }
+      }
+
+      if (ok) {
+        items.push({
+          alimento_oferecido: item.nome,
+          categoria_correspondida: item.categoria,
+          quantidade: `${item.quantidade} ${item.unidade}`,
+          id_alimento: item.id
+        });
+        usedAlimentos.add(item.id);
+      }
+    }
+
+    if (items.length > 0) {
+      results.push({
+        nome_ong: ong.nome,
+        motivo_prioridade: `ONG Priorizada por IA por possuir o maior tempo de espera desde a última doação registrada (${ong.tempoSemDoacaoDias} dias sem doações). Mapeamento lógico realizado para atender as necessidades de: ${ong.necessidades.join(", ")}.`,
+        itens_atendidos: items,
+        nivel_urgencia: ong.tempoSemDoacaoDias >= 15 ? 'Crítico' : (ong.tempoSemDoacaoDias >= 10 ? 'Alto' : 'Médio')
+      });
+    }
+  }
+
+  return results;
+}
+
 export default function App() {
   const [alimentos, setAlimentos] = useState<Alimento[]>(INITIAL_ALIMENTOS);
-  const [ongs] = useState<Ong[]>(INITIAL_ONGS);
+  const [ongs, setOngs] = useState<Ong[]>(INITIAL_ONGS);
+  const [user, setUser] = useState<{ name: string; role: 'ong' | 'supermercado'; email: string } | null>(null);
   
-  // Tab switcher actor states:
-  // 'ong' -> Screen 1, Screen 3
-  // 'supermercado' -> Screen 2, Screen 4, Screen 5
-  // 'ia' -> The mandatory business matching simulation panel
-  const [activeActor, setActiveActor] = useState<'ong' | 'supermercado' | 'ia'>('ong');
+  // Tab switcher active state
+  const [activeActor, setActiveActor] = useState<'ong' | 'supermercado' | 'relatorios' | 'perfil'>('ong');
+  
+  // Invisible AI Matching results state computed in background
+  const [matches, setMatches] = useState<any[]>([]);
 
   // Coletas tracking state
   const [activeColetas, setActiveColetas] = useState<ColetaAtiva[]>([
     {
       id: 'coleta_1',
       aberto: true,
-      supermercado: 'Supermercado Alvorada',
+      supermercado: 'Supermercado Silva',
       pedidoId: '88291',
       itens: [
-        { nome: 'Arroz Integral', quantidade: '2kg', icone: 'shopping_basket' },
-        { nome: 'Ovos Mantiqueira', quantidade: '1 Dúzia', icone: 'egg' },
-        { nome: 'Cesta de Hortifruti Variada', quantidade: '1 unidade', icone: 'nutrition' }
+        { nome: 'Pães Artesanais', quantidade: '15 un', icone: 'bakery_dining' }
       ],
       dataRetirada: 'Hoje, às 17h30',
       status: 'Pendente'
     }
   ]);
 
-  // Statistics
-  const [atendidosCount, setAtendidosCount] = useState(1200);
-  const [coletasCount, setColetasCount] = useState(42);
-
-  // Profile switches
-  const handleActorSwitch = (actor: 'ong' | 'supermercado' | 'ia') => {
-    setActiveActor(actor);
+  // Recalculate matches silently whenever food inventory or needs change
+  const recalculateMatchesSilently = async (currentAlimentos: Alimento[], currentOngs: Ong[]) => {
+    try {
+      const response = await fetch('/api/match', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ alimentos: currentAlimentos, ongs: currentOngs }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMatches(data.matches);
+      } else {
+        throw new Error();
+      }
+    } catch (err) {
+      // Fallback local matching
+      const fallback = simulateMatchingLocal(currentAlimentos, currentOngs);
+      setMatches(fallback);
+    }
   };
 
-  // Reserving an item dynamically
+  useEffect(() => {
+    recalculateMatchesSilently(alimentos, ongs);
+  }, [alimentos, ongs]);
+
+  const handleLogin = (loggedInUser: { name: string; role: 'ong' | 'supermercado'; email: string }) => {
+    setUser(loggedInUser);
+    
+    // Automatically match or create the user in ONGs/Supermarkets database simulation
+    if (loggedInUser.role === 'ong') {
+      setActiveActor('ong');
+      // If NGO doesn't exist, add it
+      setOngs(prev => {
+        if (prev.some(o => o.nome.toLowerCase() === loggedInUser.name.toLowerCase())) return prev;
+        return [
+          {
+            id: `ong_${Date.now()}`,
+            nome: loggedInUser.name,
+            necessidades: ['Padaria', 'Frutas'],
+            tempoSemDoacaoDias: 12,
+            ultimaDoacao: '15/05/2026',
+            nivelUrgencia: 'Alto',
+            tempoSegundosSimulado: 1036800,
+            endereco: 'Localizada no Centro'
+          },
+          ...prev
+        ];
+      });
+    } else {
+      setActiveActor('supermercado');
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+  };
+
+  // NGO reserves an item from active matches list
   const handleReservarAlimento = (alimento: Alimento) => {
-    // 1. Update status to reserved/awaiting
     setAlimentos(prev => prev.map(item => 
       item.id === alimento.id ? { ...item, status: 'Aguardando Coleta' } : item
     ));
 
-    // 2. Add an active coleta
     const newColeta: ColetaAtiva = {
       id: `coleta_${Date.now()}`,
       aberto: true,
-      supermercado: alimento.doador || 'Supermercado Parceiro',
+      supermercado: alimento.doador || 'Supermercado Silva',
       pedidoId: Math.floor(10000 + Math.random() * 90000).toString(),
       itens: [
         { nome: alimento.nome, quantidade: `${alimento.quantidade} ${alimento.unidade}`, icone: 'shopping_basket' }
@@ -171,22 +265,22 @@ export default function App() {
     setActiveColetas(prev => [newColeta, ...prev]);
   };
 
+  // Supermarket confirms collection of active coleta (replaces NGO finalizing)
   const handleFinalizarColeta = (coletaId: string) => {
-    // 1. Mark coleta completed
+    const targetColeta = activeColetas.find(c => c.id === coletaId);
+    if (!targetColeta) return;
+
+    // Mark coleta completed
     setActiveColetas(prev => prev.filter(c => c.id !== coletaId));
 
-    // 2. Update food items that match this
+    // Update food items that match this coleta
+    const itemNames = targetColeta.itens.map(i => i.nome.toLowerCase());
     setAlimentos(prev => prev.map(item => {
-      // simulate converting item status to Coletado
-      if (item.status === 'Aguardando Coleta') {
+      if (itemNames.some(name => item.nome.toLowerCase().includes(name))) {
         return { ...item, status: 'Coletado' };
       }
       return item;
     }));
-
-    // 3. Increment counters
-    setColetasCount(prev => prev + 1);
-    setAtendidosCount(prev => prev + 12);
   };
 
   // Adding new food supply as supermarket manager
@@ -194,14 +288,35 @@ export default function App() {
     const fresh: Alimento = {
       ...newItem,
       id: `alimento_${Date.now()}`,
-      status: 'Aguardando Coleta',
+      status: 'Pendente',
       tempoExpiraHora: 8,
-      doador: 'Mercado do Porto',
-      distanciaKm: 0.8
+      doador: user ? user.name : 'Supermercado Silva',
+      distanciaKm: 1.2
     };
 
     setAlimentos(prev => [fresh, ...prev]);
   };
+
+  // NGO updates/registers their needs list
+  const handleUpdateNecessidades = (newNecessidades: string[]) => {
+    if (!user) return;
+    setOngs(prev => prev.map(ong => {
+      if (ong.nome.toLowerCase() === user.name.toLowerCase()) {
+        return { ...ong, necessidades: newNecessidades };
+      }
+      return ong;
+    }));
+  };
+
+  // If user is not logged in, render AuthView
+  if (!user) {
+    return <AuthView onLoginSuccess={handleLogin} />;
+  }
+
+  // Profile icon mapping
+  const profileAvatarUrl = user.role === 'ong' 
+    ? "https://lh3.googleusercontent.com/aida-public/AB6AXuAG4-Tz7fVuQ9aVkyeQvEztoGpy6KEX753m-0NGXj4GSGp7ewHfi0DsA_61Dta57L8pIAWjbzQM6MJtJj3IjW5zkZK-uiIyV0R7cthVoKORFSQdj8Mn852XhJ3ef39GftkHySJ_G-v8lB_lSur9Y2lkRfNXrezecDdGskhS3jMsgpX9EyUbUJFC-RIK9Gt2LB8pXIDiWf60SgqSY0Az7jLCS6kwWkXwLTnkTyBJX3SzaSIa3WEBPlGj0aPfcyl2M2tuRV7HWBq_9rc"
+    : "https://lh3.googleusercontent.com/aida-public/AB6AXuC_5dBPr1edcTxfYnubPElQKqIpbWI9KiccpsTlre41qTPATHK7v7n8SrKxg82WYaxGASZ5QXpChJKDTEcpor-xr3Cqsvp3AdQ-Wff8wGiLv1W_deFzW7-REvwYLj8alKefX4SjWVoWdo6Vn8A1WDuH_MEW2IRNf79Qd6ebPY2Iq3Qv3A83Tjx3NvwKBFibmAd4UMiyjf7rtHOF4yE0BxTctPhkZA_BWm84G226IVoYoJZkORpCWlkxKA2AWDHUY1s3vadbdE7qwOw";
 
   return (
     <div id="app-viewport" className="min-h-screen bg-[#f3f4f6] text-on-surface flex flex-col items-center">
@@ -216,35 +331,31 @@ export default function App() {
                 id="avatar-image"
                 alt="Profile Avatar" 
                 className="w-full h-full object-cover" 
-                src={
-                  activeActor === 'ong' 
-                    ? "https://lh3.googleusercontent.com/aida-public/AB6AXuAG4-Tz7fVuQ9aVkyeQvEztoGpy6KEX753m-0NGXj4GSGp7ewHfi0DsA_61Dta57L8pIAWjbzQM6MJtJj3IjW5zkZK-uiIyV0R7cthVoKORFSQdj8Mn852XhJ3ef39GftkHySJ_G-v8lB_lSur9Y2lkRfNXrezecDdGskhS3jMsgpX9EyUbUJFC-RIK9Gt2LB8pXIDiWf60SgqSY0Az7jLCS6kwWkXwLTnkTyBJX3SzaSIa3WEBPlGj0aPfcyl2M2tuRV7HWBq_9rc"
-                    : "https://lh3.googleusercontent.com/aida-public/AB6AXuC_5dBPr1edcTxfYnubPElQKqIpbWI9KiccpsTlre41qTPATHK7v7n8SrKxg82WYaxGASZ5QXpChJKDTEcpor-xr3Cqsvp3AdQ-Wff8wGiLv1W_deFzW7-REvwYLj8alKefX4SjWVoWdo6Vn8A1WDuH_MEW2IRNf79Qd6ebPY2Iq3Qv3A83Tjx3NvwKBFibmAd4UMiyjf7rtHOF4yE0BxTctPhkZA_BWm84G226IVoYoJZkORpCWlkxKA2AWDHUY1s3vadbdE7qwOw"
-                }
+                src={profileAvatarUrl}
               />
             </div>
             <div>
               <h1 className="text-base font-bold text-primary">Fome Zero</h1>
               <p className="text-[10px] text-on-surface-variant font-mono font-bold leading-none uppercase">
-                {activeActor === 'ong' ? 'Voluntariado' : activeActor === 'supermercado' ? 'Estabelecimento' : 'Matching de IA'}
+                {user.role === 'ong' ? 'ONG / Voluntário' : 'Supermercado / Doador'}
               </p>
             </div>
           </div>
           
           <div className="flex items-center gap-2">
-            {/* Quick actor toggler header badge */}
-            <button
-              id="header-switch-role-btn"
-              onClick={() => handleActorSwitch(activeActor === 'ong' ? 'supermercado' : activeActor === 'supermercado' ? 'ia' : 'ong')}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-low hover:bg-surface-container-highest transition-colors rounded-full border border-outline-variant/30 text-xs font-semibold text-on-surface cursor-pointer"
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5 text-primary" />
-              <span>Trocar Perfil</span>
-            </button>
-            
-            <div id="location-badge" className="text-on-surface-variant flex items-center justify-center p-2 rounded-full hover:bg-surface-container-high transition-all pointer-events-none">
-              <MapPin className="w-5 h-5 text-primary" />
+            <div className="text-xs font-bold text-on-surface px-3 py-1.5 bg-surface-container-low rounded-xl border border-outline-variant/15 flex items-center gap-1">
+              <UserCheck className="w-3.5 h-3.5 text-primary" />
+              <span className="max-w-[120px] truncate">{user.name}</span>
             </div>
+            
+            <button
+              id="header-logout-btn"
+              onClick={handleLogout}
+              className="flex items-center justify-center p-2.5 bg-rose-50 hover:bg-rose-100/80 transition-colors rounded-full border border-rose-200 text-rose-600 cursor-pointer"
+              title="Sair da Conta"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </header>
 
@@ -252,94 +363,117 @@ export default function App() {
         <div id="context-info-bar" className="bg-primary-container/20 border-b border-primary-container/40 px-6 py-2.5 flex items-center justify-between text-xs font-medium">
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="text-primary font-bold">Modo de Análise Ativo</span>
+            <span className="text-primary font-bold">Autenticado com Sucesso</span>
           </div>
-          <div className="flex items-center gap-3">
-            <span 
-              onClick={() => handleActorSwitch('ong')} 
-              className={`cursor-pointer transition-all pb-1 ${activeActor === 'ong' ? 'text-primary border-b-2 border-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
-            >
-              Sou ONG
-            </span>
-            <span 
-              onClick={() => handleActorSwitch('supermercado')} 
-              className={`cursor-pointer transition-all pb-1 ${activeActor === 'supermercado' ? 'text-primary border-b-2 border-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
-            >
-              Sou Doador
-            </span>
-            <span 
-              onClick={() => handleActorSwitch('ia')} 
-              className={`cursor-pointer transition-all pb-1 ${activeActor === 'ia' ? 'text-primary border-b-2 border-primary font-bold' : 'text-on-surface-variant hover:text-on-surface'}`}
-            >
-              Painel IA
-            </span>
+          <div className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+            {user.role === 'ong' ? 'Painel de Voluntariado' : 'Painel Doador'}
           </div>
         </div>
 
         {/* Main Content Area */}
         <main className="flex-1 p-6 space-y-6 bg-white">
-          {activeActor === 'ong' ? (
+          {user.role === 'ong' ? (
             <NgoView 
               alimentos={alimentos}
               onReservar={handleReservarAlimento}
               activeColetas={activeColetas}
               onFinalizarColeta={handleFinalizarColeta}
               onNavigateToTab={(tab) => {
-                if (tab === 'home') handleActorSwitch('ong');
+                if (tab === 'home') setActiveActor('ong');
+                else if (tab === 'retirada') setActiveActor('ong');
               }}
+              // Passing new states
+              user={user}
+              ongs={ongs}
+              matches={matches}
+              onUpdateNecessidades={handleUpdateNecessidades}
+              activeActorTab={activeActor}
             />
-          ) : activeActor === 'supermercado' ? (
+          ) : (
             <SupermarketView 
               alimentos={alimentos}
               onAddAlimento={handleAddAlimento}
-            />
-          ) : (
-            <AIMatcher 
-              alimentos={alimentos}
-              ongs={ongs}
+              // Passing new states
+              user={user}
+              activeColetas={activeColetas}
+              onFinalizarColeta={handleFinalizarColeta}
+              matches={matches}
+              activeActorTab={activeActor}
             />
           )}
         </main>
 
-        {/* Permanent Bottom Navigation Bar mimicking Screen flows */}
+        {/* Permanent Bottom Navigation Bar based on user role */}
         <nav id="permanent-bottom-nav" className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto z-40 flex justify-around items-center px-4 py-3 pb-safe bg-white border-t border-outline-variant/30 rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
-          <button
-            id="nav-ong-btn"
-            onClick={() => handleActorSwitch('ong')}
-            className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
-              activeActor === 'ong' 
-                ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
-                : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            <Layers className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] font-bold">Ver Matches</span>
-          </button>
+          {user.role === 'ong' ? (
+            <>
+              <button
+                id="nav-ong-necessidades"
+                onClick={() => setActiveActor('ong')}
+                className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
+                  activeActor === 'ong' 
+                    ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <Layers className="w-5 h-5 mb-0.5" />
+                <span className="text-[10px] font-bold">Necessidades & Matches</span>
+              </button>
+
+              <button
+                id="nav-ong-relatorios"
+                onClick={() => setActiveActor('relatorios')}
+                className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
+                  activeActor === 'relatorios' 
+                    ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <FileText className="w-5 h-5 mb-0.5" />
+                <span className="text-[10px] font-bold">Relatório PDF</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                id="nav-supermarket-doar"
+                onClick={() => setActiveActor('supermercado')}
+                className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
+                  activeActor === 'supermercado' 
+                    ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <PlusCircle className="w-5 h-5 mb-0.5" />
+                <span className="text-[10px] font-bold">Doar & Produtos</span>
+              </button>
+
+              <button
+                id="nav-supermarket-relatorios"
+                onClick={() => setActiveActor('relatorios')}
+                className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
+                  activeActor === 'relatorios' 
+                    ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <FileText className="w-5 h-5 mb-0.5" />
+                <span className="text-[10px] font-bold">Relatório PDF</span>
+              </button>
+            </>
+          )}
 
           <button
-            id="nav-matcher-btn"
-            onClick={() => handleActorSwitch('ia')}
+            id="nav-profile-btn"
+            onClick={() => setActiveActor('perfil')}
             className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
-              activeActor === 'ia' 
-                ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
-                : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            <Sparkles className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] font-bold">Mapeador IA</span>
-          </button>
-
-          <button
-            id="nav-supermarket-btn"
-            onClick={() => handleActorSwitch('supermercado')}
-            className={`flex flex-col items-center justify-center p-2 rounded-xl transition-all ${
-              activeActor === 'supermercado' 
+              activeActor === 'perfil' 
                 ? 'bg-primary text-[#161e00] font-bold scale-105 px-5' 
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
             <Award className="w-5 h-5 mb-0.5" />
-            <span className="text-[10px] font-bold">Perfis & Doar</span>
+            <span className="text-[10px] font-bold">Perfil</span>
           </button>
         </nav>
 

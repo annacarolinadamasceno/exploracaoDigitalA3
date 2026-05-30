@@ -11,23 +11,45 @@ import {
   Award,
   CheckCircle,
   HelpCircle,
-  Milk,
-  Apple,
   Clock,
-  Egg
+  Check,
+  FileText,
+  Camera,
+  Store,
+  UserCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Alimento } from '../types';
+import { Alimento, ColetaAtiva } from '../types';
+import { downloadReportPDF } from '../utils/ReportGenerator';
 
 interface SupermarketViewProps {
   alimentos: Alimento[];
   onAddAlimento: (item: Omit<Alimento, 'id' | 'status'>) => void;
+  // Auth and new tab state integration props
+  user: { name: string; email: string };
+  activeColetas: ColetaAtiva[];
+  onFinalizarColeta: (coletaId: string) => void;
+  matches: any[];
+  activeActorTab: 'supermercado' | 'relatorios' | 'perfil';
 }
 
-export default function SupermarketView({ alimentos, onAddAlimento }: SupermarketViewProps) {
+export default function SupermarketView({ 
+  alimentos, 
+  onAddAlimento,
+  user,
+  activeColetas,
+  onFinalizarColeta,
+  matches,
+  activeActorTab
+}: SupermarketViewProps) {
   const [showDrawer, setShowDrawer] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // QR Code Scanner Simulation states
+  const [activeScanningColeta, setActiveScanningColeta] = useState<ColetaAtiva | null>(null);
+  const [qrScanned, setQrScanned] = useState(false);
+  const [isScanningAnimation, setIsScanningAnimation] = useState(false);
 
   // Form states
   const [nome, setNome] = useState('');
@@ -44,6 +66,12 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
     { id: 'Enlatados', label: 'Enlatados', icone: '🥫' },
     { id: 'Outros', label: 'Outros', icone: '📦' },
   ];
+
+  // Filter food inventory to show only the ones registered by THIS Supermarket
+  const myAlimentos = alimentos.filter(a => !a.doador || a.doador.toLowerCase() === user.name.toLowerCase());
+
+  // Filter scheduled collections for this supermarket
+  const myColetas = activeColetas.filter(c => !c.supermercado || c.supermercado.toLowerCase() === user.name.toLowerCase());
 
   const handleOpenDrawer = () => {
     setShowDrawer(true);
@@ -87,11 +115,73 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
     setShowFullForm(true);
   };
 
+  // Simulating QR Code Scanning action
+  const handleOpenScanner = (coleta: ColetaAtiva) => {
+    setActiveScanningColeta(coleta);
+    setQrScanned(false);
+    setIsScanningAnimation(false);
+  };
+
+  const handleSimularLeituraQR = () => {
+    setIsScanningAnimation(true);
+    setTimeout(() => {
+      setIsScanningAnimation(false);
+      setQrScanned(true);
+    }, 1500);
+  };
+
+  const handleConfirmarColeta = (coletaId: string) => {
+    onFinalizarColeta(coletaId);
+    setActiveScanningColeta(null);
+    setQrScanned(false);
+  };
+
+  // Generate PDF donation report
+  const handleExportPDF = () => {
+    const reportData = {
+      title: `Relatório de Doações - ${user.name}`,
+      userName: user.name,
+      userRole: 'supermercado' as const,
+      userEmail: user.email,
+      stats: [
+        { label: 'Total Doado', value: '1.240 kg' },
+        { label: 'Doações Concluídas', value: '42 coletas' },
+        { label: 'Impacto Estimado', value: '2.480 refeições' }
+      ],
+      history: [
+        {
+          date: new Date().toLocaleDateString('pt-BR'),
+          item: 'Frutas da Cesta Estação',
+          quantity: '20 kg',
+          partner: 'ONG Lar da Esperança',
+          status: 'Pendente'
+        },
+        {
+          date: '24/05/2026',
+          item: 'Caixas de Leite',
+          quantity: '48 un',
+          partner: 'ONG Lar da Esperança',
+          status: 'Concluída'
+        },
+        {
+          date: '18/05/2026',
+          item: 'Pães Artesanais',
+          quantity: '15 un',
+          partner: 'ONG Mesa Unida',
+          status: 'Concluída'
+        }
+      ]
+    };
+
+    downloadReportPDF(reportData);
+  };
+
   return (
     <div id="supermarket-view-root" className="space-y-6">
       <AnimatePresence mode="wait">
-        {showSuccess ? (
-          /* Screen 5: Success view */
+        
+        {/* Screen 5: Success Form view */}
+        {showSuccess && (
           <motion.div
             key="success"
             initial={{ opacity: 0, scale: 0.95 }}
@@ -112,7 +202,7 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
             <div className="space-y-2">
               <h2 className="text-2xl font-bold text-on-surface">Doação cadastrada com sucesso!</h2>
               <p className="text-sm text-on-surface-variant max-w-sm px-4">
-                Sua doação já está disponível para as ONGs parceiras
+                O cérebro de IA processará a distribuição para a melhor ONG compatível no background.
               </p>
             </div>
 
@@ -130,21 +220,23 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
               <button
                 id="success-back-home"
                 onClick={handleBackToHome}
-                className="w-full h-14 bg-primary-container text-[#161e00] text-sm font-bold rounded-xl flex items-center justify-center gap-2 drop-shadow-md active:scale-95 transition-all"
+                className="w-full h-14 bg-primary-container text-[#161e00] text-sm font-bold rounded-xl flex items-center justify-center gap-2 drop-shadow-md active:scale-95 transition-all cursor-pointer"
               >
                 Voltar para Home
               </button>
               <button
                 id="success-add-another"
                 onClick={handleAddAnother}
-                className="w-full h-14 bg-surface-container border border-outline-variant/30 text-on-surface text-sm font-bold rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
+                className="w-full h-14 bg-surface-container border border-outline-variant/30 text-on-surface text-sm font-bold rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
               >
                 Cadastrar outro item
               </button>
             </div>
           </motion.div>
-        ) : showFullForm ? (
-          /* Screen 4: Full page cadastre form */
+        )}
+
+        {/* Screen 4: Full page cadastre form */}
+        {showFullForm && !showSuccess && (
           <motion.div
             key="full-form"
             initial={{ opacity: 0, x: 20 }}
@@ -155,7 +247,7 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowFullForm(false)}
-                className="p-2 bg-surface-container rounded-full hover:bg-surface-container-high transition-colors"
+                className="p-2 bg-surface-container rounded-full hover:bg-surface-container-high transition-colors cursor-pointer"
                 type="button"
               >
                 <ArrowLeft className="w-5 h-5 text-on-surface" />
@@ -167,7 +259,7 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/20 space-y-4">
+              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/20 space-y-4 shadow-sm">
                 <div>
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wide mb-2">Nome do Item</label>
                   <input
@@ -175,7 +267,7 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                     required
                     value={nome}
                     onChange={(e) => setNome(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl bg-surface-container-low border-none focus:ring-2 focus:ring-primary text-sm text-on-surface placeholder:text-on-surface-variant/40"
+                    className="w-full h-12 px-4 rounded-xl bg-white border border-outline-variant focus:ring-2 focus:ring-primary text-sm text-on-surface placeholder:text-on-surface-variant/40"
                     placeholder="Ex: Maçãs Gala, Pão Francês"
                   />
                 </div>
@@ -188,10 +280,10 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                         key={cat.id}
                         type="button"
                         onClick={() => setCategoria(cat.id)}
-                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${
+                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all cursor-pointer ${
                           categoria === cat.id
                             ? 'bg-primary-container border-2 border-primary text-[#161e00] shadow-sm transform scale-[1.03]'
-                            : 'bg-surface-container-low border-outline-variant/30 hover:bg-surface-container-high text-on-surface-variant'
+                            : 'bg-white border-outline-variant/30 hover:bg-surface-container text-on-surface-variant'
                         }`}
                       >
                         <span className="text-2xl mb-1">{cat.icone}</span>
@@ -210,7 +302,7 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                       min="1"
                       value={quantidade || ''}
                       onChange={(e) => setQuantidade(parseInt(e.target.value) || 0)}
-                      className="w-full h-12 px-4 rounded-xl bg-surface-container-low border-none focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                      className="w-full h-12 px-4 rounded-xl bg-white border border-outline-variant focus:ring-2 focus:ring-primary text-sm text-on-surface"
                       placeholder="0"
                     />
                   </div>
@@ -219,7 +311,7 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                     <select
                       value={unidade}
                       onChange={(e) => setUnidade(e.target.value)}
-                      className="w-full h-12 px-4 rounded-xl bg-surface-container-low border-none focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                      className="w-full h-12 px-4 rounded-xl bg-white border border-outline-variant focus:ring-2 focus:ring-primary text-sm text-on-surface"
                     >
                       <option>Quilogramas (kg)</option>
                       <option>Unidades (un)</option>
@@ -236,49 +328,24 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                     required
                     value={validade}
                     onChange={(e) => setValidade(e.target.value)}
-                    className="w-full h-12 px-4 rounded-xl bg-surface-container-low border-none focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                    className="w-full h-12 px-4 rounded-xl bg-white border border-outline-variant focus:ring-2 focus:ring-primary text-sm text-on-surface"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full h-14 bg-primary-container text-[#161e00] font-bold rounded-xl flex items-center justify-center gap-2 drop-shadow-md active:scale-95 transition-all mt-4 cursor-pointer"
+                  className="w-full h-14 bg-primary text-[#161e00] font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all mt-4 cursor-pointer"
                 >
-                  <Heart className="w-5 h-5" />
-                  Cadastrar Doação
+                  <Heart className="w-5 h-5 fill-current" />
+                  <span>Cadastrar Doação</span>
                 </button>
               </div>
             </form>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Conservation Tip */}
-              <div className="relative h-44 rounded-xl overflow-hidden shadow-sm">
-                <img 
-                  alt="Fresh Produce" 
-                  className="w-full h-full object-cover" 
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCY6J2VzV58DyJDnpcxENVg4h2LYgtL6vg3WD9ZhTSj-GaTtuM27opQhHlrQS9OAzCF4arb2-oU5cjozw2Md5rfxa3aMoIT_2_VSL3pzPNiSrMItOC_CciHLWgHk4oTzZlBbwAd-cIF6Vhrz0-k-Z1iy16BOmnYFnJrGw_i5zTy3uUYV6Q_4KGT9Cv5wjTdzo5h76W2Zqx_ObtAGjG4PTClemdyWjFSEyuRwfOdn3r2dDhUIGc-0bmhMdmnop9i5C_9uZR6-tmEw1k"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent flex flex-col justify-end p-4">
-                  <h3 className="text-white text-sm font-bold">Dica de Conservação</h3>
-                  <p className="text-white/80 text-xs mt-0.5">Frutas frescas duram 20% mais se mantidas em locais arejados.</p>
-                </div>
-              </div>
-
-              {/* Goal Progress */}
-              <div className="bg-surface-container rounded-xl p-5 border border-outline-variant/10 flex flex-col justify-between">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-on-surface">Meta Semanal</span>
-                  <span className="text-xs font-bold text-primary">75%</span>
-                </div>
-                <div className="w-full h-2.5 bg-surface-container-high rounded-full overflow-hidden my-3">
-                  <div className="h-full bg-primary-container rounded-full" style={{ width: '75%' }}></div>
-                </div>
-                <p className="text-xs text-on-surface-variant text-center">Faltam 45kg para atingir a meta de doação!</p>
-              </div>
-            </div>
           </motion.div>
-        ) : (
-          /* Screen 2: Monthly Impact dashboard & Donation drawer opener */
+        )}
+
+        {/* Screen 2: Main Supermarket View (Doar & Retiradas) */}
+        {activeActorTab === 'supermercado' && !showFullForm && !showSuccess && (
           <motion.div
             key="dashboard"
             initial={{ opacity: 0, y: 15 }}
@@ -286,63 +353,44 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
             exit={{ opacity: 0, y: -15 }}
             className="space-y-6"
           >
-            {/* Monthly Impact Section */}
-            <div id="monthly-impact-section" className="space-y-3">
-              <h2 className="text-lg font-bold text-on-surface">Impacto Mensal</h2>
-              <div id="metrics-grid" className="grid grid-cols-2 gap-4">
-                {/* Total Donated */}
-                <div className="bg-surface-container p-5 rounded-xl border border-outline-variant/10 space-y-1">
-                  <Heart className="w-5 h-5 text-primary fill-current" />
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Total Doado</p>
-                  <p className="text-2xl font-bold text-primary">1.240 kg</p>
-                </div>
-                {/* Meals Provided */}
-                <div className="bg-surface-container p-5 rounded-xl border border-outline-variant/10 space-y-1">
-                  <Utensils className="w-5 h-5 text-primary" />
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Refeições Geradas</p>
-                  <p className="text-2xl font-bold text-primary">~2.480</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Main Action buttons */}
-            <div id="main-supermarket-actions" className="grid grid-cols-1 gap-3">
+            {/* Quick Actions Bar */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <button
                 id="novo-item-col-btn"
                 onClick={handleOpenDrawer}
-                className="w-full h-14 bg-primary-fixed text-[#161e00] font-bold rounded-xl flex items-center justify-center gap-2 drop-shadow-sm active:scale-95 transition-all cursor-pointer"
+                className="w-full h-14 bg-primary text-[#161e00] font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-all cursor-pointer"
               >
                 <PlusCircle className="w-5 h-5" />
-                Novo Item para Doação
+                <span>Nova Doação Rápida</span>
               </button>
 
               <button
                 id="full-form-cadastre-btn"
                 onClick={handleOpenFullForm}
-                className="w-full h-14 bg-surface-container border border-outline-variant/30 text-on-surface font-bold rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer"
+                className="w-full h-14 bg-white border border-outline-variant/40 text-on-surface font-extrabold rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
               >
                 <Award className="w-5 h-5 text-primary" />
-                Cadastrar Doação Completa (Bento)
+                <span>Formulário de Cadastro Bento</span>
               </button>
             </div>
 
-            {/* Overlay drawer layout modal context */}
+            {/* Active Donations Drawer overlay */}
             <AnimatePresence>
               {showDrawer && (
                 <>
-                  <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={() => setShowDrawer(false)} />
+                  <div className="fixed inset-0 bg-black/50 z-40 backdrop-blur-xs" onClick={() => setShowDrawer(false)} />
                   <motion.div
                     initial={{ y: '100%' }}
                     animate={{ y: 0 }}
                     exit={{ y: '100%' }}
                     transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-                    className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto rounded-t-2xl bg-surface-container-high border-t border-outline-variant/30 p-6 z-50 space-y-4"
+                    className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto rounded-t-3xl bg-white border-t border-outline-variant p-6 z-50 space-y-4 shadow-2xl"
                   >
-                    <div className="flex items-center justify-between pb-2">
+                    <div className="flex items-center justify-between pb-2 border-b border-outline-variant/10">
                       <h3 className="text-lg font-bold text-on-surface">Registrar Alimento</h3>
                       <button 
                         onClick={() => setShowDrawer(false)}
-                        className="p-1.5 bg-surface-container hover:bg-surface-container-high rounded-full"
+                        className="p-1.5 bg-surface-container hover:bg-surface-container-high rounded-full cursor-pointer"
                       >
                         <X className="w-4 h-4 text-on-surface" />
                       </button>
@@ -356,7 +404,7 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                           required
                           value={nome}
                           onChange={(e) => setNome(e.target.value)}
-                          className="w-full h-12 px-4 rounded-xl bg-surface-container-low border-none focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                          className="w-full h-12 px-4 rounded-xl bg-surface-container border border-outline-variant/20 focus:ring-2 focus:ring-primary text-sm text-on-surface"
                           placeholder="Ex: Arroz Integral, Pães, Maçãs"
                         />
                       </div>
@@ -369,13 +417,13 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                             required
                             value={validade}
                             onChange={(e) => setValidade(e.target.value)}
-                            className="w-full h-12 px-4 rounded-xl bg-surface-container-low border-none focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                            className="w-full h-12 px-4 rounded-xl bg-surface-container border border-outline-variant/20 focus:ring-2 focus:ring-primary text-sm text-on-surface"
                           />
                         </div>
 
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Quantidade</label>
-                          <div className="flex bg-surface-container-low rounded-xl overflow-hidden">
+                          <div className="flex bg-surface-container border border-outline-variant/20 rounded-xl overflow-hidden">
                             <input
                               type="number"
                               required
@@ -403,13 +451,13 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                         <button
                           type="button"
                           onClick={handleOpenFullForm}
-                          className="w-1/3 h-12 bg-surface-container-low hover:bg-surface-container border border-outline-variant/30 text-on-surface text-xs font-bold rounded-lg transition-all"
+                          className="w-1/3 h-12 bg-surface-container hover:bg-surface-container-high border border-outline-variant text-on-surface text-xs font-bold rounded-xl transition-all cursor-pointer"
                         >
-                          Modo Avançado
+                          Avançado
                         </button>
                         <button
                           type="submit"
-                          className="flex-1 h-12 bg-primary-container text-[#161e00] text-xs font-bold rounded-lg active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          className="flex-1 h-12 bg-primary text-[#161e00] text-xs font-extrabold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                         >
                           Confirmar Registro
                         </button>
@@ -420,15 +468,132 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
               )}
             </AnimatePresence>
 
-            {/* Active Donations List */}
+            {/* Scheduled Coletas matches area (scanner confirm) */}
+            <div id="scheduled-withdrawals" className="space-y-4 bg-surface-container p-5 rounded-2xl border border-outline-variant/10 shadow-sm">
+              <div className="flex items-center justify-between border-b border-outline-variant/15 pb-2">
+                <div>
+                  <h3 className="text-sm font-bold text-on-surface flex items-center gap-1">
+                    <Store className="w-4 h-4 text-primary" />
+                    <span>Retiradas Agendadas (Matches)</span>
+                  </h3>
+                  <p className="text-[10px] text-on-surface-variant">Confirme a entrega lendo o QR Code apresentado pela ONG</p>
+                </div>
+                <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase">
+                  Scanner
+                </span>
+              </div>
+
+              <div className="space-y-3 max-h-[220px] overflow-y-auto">
+                {myColetas.map((coleta) => (
+                  <div 
+                    key={coleta.id} 
+                    className="bg-white border border-outline-variant/30 p-4 rounded-xl flex items-center justify-between shadow-xs"
+                  >
+                    <div>
+                      <p className="text-xs font-bold text-primary">{coleta.supermercado}</p>
+                      <p className="text-[10px] text-on-surface-variant mt-0.5">
+                        Itens: <span className="font-semibold">{coleta.itens.map(i => `${i.quantidade} de ${i.nome}`).join(', ')}</span>
+                      </p>
+                      <p className="text-[9px] font-mono text-on-surface-variant/80 uppercase mt-0.5 leading-none">Pedido #{coleta.pedidoId}</p>
+                    </div>
+                    <button
+                      onClick={() => handleOpenScanner(coleta)}
+                      className="bg-primary text-[#161e00] text-[10px] font-extrabold px-3 py-2 rounded-lg active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Validar QR</span>
+                    </button>
+                  </div>
+                ))}
+                {myColetas.length === 0 && (
+                  <p className="text-xs text-on-surface-variant/65 italic py-4 text-center">Nenhuma ONG agendada para coleta neste momento.</p>
+                )}
+              </div>
+            </div>
+
+            {/* QR Scanner Simulator Modal overlay */}
+            <AnimatePresence>
+              {activeScanningColeta && (
+                <>
+                  <div className="fixed inset-0 bg-black/60 z-50 backdrop-blur-xs" onClick={() => setActiveScanningColeta(null)} />
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white rounded-3xl border border-outline-variant p-6 z-55 space-y-6 shadow-2xl"
+                  >
+                    <div className="flex justify-between items-center pb-2 border-b border-outline-variant/10">
+                      <div>
+                        <h3 className="text-base font-bold text-on-surface">Validar QR Code de Retirada</h3>
+                        <p className="text-[10px] text-on-surface-variant">ONG: {activeScanningColeta.supermercado} • Pedido #{activeScanningColeta.pedidoId}</p>
+                      </div>
+                      <button 
+                        onClick={() => setActiveScanningColeta(null)}
+                        className="p-1 bg-surface-container hover:bg-surface-container-high rounded-full cursor-pointer"
+                      >
+                        <X className="w-4 h-4 text-on-surface" />
+                      </button>
+                    </div>
+
+                    {/* Camera simulation box */}
+                    <div className="relative aspect-square w-full max-w-[280px] mx-auto bg-slate-900 rounded-2xl overflow-hidden flex flex-col items-center justify-center border-4 border-outline-variant">
+                      {isScanningAnimation ? (
+                        <div className="absolute inset-x-0 h-1 bg-primary animate-scanLine top-0"></div>
+                      ) : null}
+
+                      {qrScanned ? (
+                        <div className="text-center space-y-2 z-10 animate-scaleUp">
+                          <CheckCircle className="w-16 h-16 text-emerald-500 mx-auto animate-bounce" />
+                          <p className="text-sm font-bold text-white uppercase tracking-wider">Leitura Efetuada!</p>
+                        </div>
+                      ) : (
+                        <div className="text-center space-y-2 z-10 p-4">
+                          <Camera className={`w-12 h-12 text-white/50 mx-auto ${isScanningAnimation ? 'animate-pulse' : ''}`} />
+                          <p className="text-xs text-white/70 leading-relaxed font-semibold">
+                            {isScanningAnimation ? 'Verificando assinatura digital...' : 'Aponte o leitor para o QR Code da ONG'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action buttons simulated scan */}
+                    <div className="flex flex-col gap-2.5">
+                      <button
+                        onClick={handleSimularLeituraQR}
+                        disabled={qrScanned || isScanningAnimation}
+                        className="w-full h-11 bg-surface-container hover:bg-surface-container-high border border-outline-variant/40 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Sparkles className="w-4 h-4 text-primary" />
+                        Simular Scanner Automático (Câmera)
+                      </button>
+
+                      <button
+                        onClick={() => handleConfirmarColeta(activeScanningColeta.id)}
+                        disabled={!qrScanned}
+                        className={`w-full h-13 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
+                          qrScanned 
+                            ? 'bg-primary text-[#161e00] cursor-pointer shadow-md active:scale-95' 
+                            : 'bg-surface-container-highest text-on-surface-variant/40 cursor-not-allowed border border-outline-variant/10'
+                        }`}
+                      >
+                        <CheckCircle className="w-5 h-5" />
+                        Confirmar Entrega de Alimentos
+                      </button>
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+
+            {/* Registered Active Supplies List */}
             <div id="active-donations-section" className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-on-surface">Minhas Doações Ativas</h2>
-                <span className="text-xs font-bold text-primary cursor-pointer hover:underline">Ver Tudo ({alimentos.length})</span>
+                <h2 className="text-base font-bold text-on-surface">Minhas Doações Cadastradas</h2>
+                <span className="text-xs font-bold text-primary cursor-pointer hover:underline">Ver Tudo ({myAlimentos.length})</span>
               </div>
 
               <div className="space-y-3">
-                {alimentos.map((item) => {
+                {myAlimentos.map((item) => {
                   let icon = '📦';
                   if (item.categoria.toLowerCase() === 'padaria') icon = '🥖';
                   else if (item.categoria.toLowerCase() === 'frutas') icon = '🍎';
@@ -443,7 +608,7 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
                       className="bg-surface-container p-4 rounded-xl flex items-center justify-between border border-outline-variant/10 shadow-sm"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center text-2xl">
+                        <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center text-2xl border border-outline-variant/20 shadow-xs">
                           {icon}
                         </div>
                         <div>
@@ -456,15 +621,15 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
 
                       <div>
                         {item.status === 'Aguardando Coleta' ? (
-                          <span className="px-2.5 py-1 rounded-full bg-primary-container/15 border border-primary/20 text-[10px] font-bold text-primary uppercase">
+                          <span className="px-2.5 py-1 rounded-full bg-primary-container/20 border border-primary/30 text-[10px] font-bold text-primary uppercase whitespace-nowrap">
                             Aguardando Coleta
                           </span>
                         ) : item.status === 'Coletado' ? (
-                          <span className="px-2.5 py-1 rounded-full bg-surface-container-highest border border-outline-variant/30 text-[10px] font-bold text-on-surface-variant uppercase">
+                          <span className="px-2.5 py-1 rounded-full bg-surface-container-highest border border-outline-variant/30 text-[10px] font-bold text-on-surface-variant uppercase whitespace-nowrap">
                             Coletado
                           </span>
                         ) : (
-                          <span className="px-2.5 py-1 rounded-full bg-yellow-500/15 border border-yellow-500/20 text-[10px] font-bold text-yellow-600 uppercase">
+                          <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-bold text-amber-600 uppercase whitespace-nowrap">
                             Pendente
                           </span>
                         )}
@@ -476,6 +641,123 @@ export default function SupermarketView({ alimentos, onAddAlimento }: Supermarke
             </div>
           </motion.div>
         )}
+
+        {/* TAB 3: Relatórios Doador (Export PDF) */}
+        {activeActorTab === 'relatorios' && (
+          <motion.div
+            key="reports"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            className="space-y-6"
+          >
+            <div className="space-y-2">
+              <h2 className="text-xl font-extrabold text-on-surface">Relatórios de Impacto Doador</h2>
+              <p className="text-xs text-on-surface-variant">Acompanhe o impacto sustentável das suas doações e baixe o certificado.</p>
+            </div>
+
+            {/* Dashboard metrics */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                <Heart className="w-5 h-5 text-primary fill-current" />
+                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mt-1">Total Salvo</p>
+                <p className="text-2xl font-black text-primary">1.240 kg</p>
+              </div>
+              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                <Utensils className="w-5 h-5 text-primary" />
+                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mt-1">Refeições Geradas</p>
+                <p className="text-2xl font-black text-primary">2.480 pratos</p>
+              </div>
+            </div>
+
+            {/* Goal Progress widget */}
+            <div className="bg-surface-container rounded-2xl p-5 border border-outline-variant/10 flex flex-col justify-between shadow-sm">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-on-surface">Meta de Doação Semanal</span>
+                <span className="font-bold text-primary">75%</span>
+              </div>
+              <div className="w-full h-3 bg-surface-container-highest rounded-full overflow-hidden my-3">
+                <div className="h-full bg-primary rounded-full" style={{ width: '75%' }}></div>
+              </div>
+              <p className="text-xs text-on-surface-variant text-center leading-relaxed">
+                Faltam 45kg para atingir a meta! As doações evitam desperdício e geram créditos sociais.
+              </p>
+            </div>
+
+            {/* Export Card */}
+            <div className="bg-surface-container p-6 rounded-3xl border border-outline-variant/20 text-center space-y-4 shadow-sm">
+              <div className="w-16 h-16 rounded-full bg-primary-container flex items-center justify-center mx-auto border border-primary/20">
+                <FileText className="w-8 h-8 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-on-surface">Baixar Demonstrativo Oficial</h3>
+                <p className="text-xs text-on-surface-variant max-w-sm mx-auto leading-relaxed">
+                  Gere e baixe seu demonstrativo formal de impacto social e ambiental para relatórios ESG corporativos e isenção fiscal de descarte.
+                </p>
+              </div>
+              <button
+                onClick={handleExportPDF}
+                className="w-full max-w-xs h-13 bg-primary text-[#161e00] font-extrabold rounded-xl inline-flex items-center justify-center gap-2 shadow-md hover:bg-opacity-95 transition-all cursor-pointer active:scale-95"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Baixar Relatório (PDF)</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* TAB 4: Profile Section */}
+        {activeActorTab === 'perfil' && (
+          <motion.div
+            key="profile"
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -15 }}
+            className="space-y-6"
+          >
+            <div className="space-y-2">
+              <h2 className="text-xl font-extrabold text-on-surface">Meu Estabelecimento</h2>
+              <p className="text-xs text-on-surface-variant">Gerencie os dados cadastrais da sua empresa doadora.</p>
+            </div>
+
+            <div className="bg-surface-container rounded-2xl border border-outline-variant/15 p-5 space-y-4 shadow-sm">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary bg-primary-container flex items-center justify-center text-3xl">
+                  🏢
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-on-surface">{user.name}</h3>
+                  <span className="text-[10px] bg-primary-container/20 border border-primary/30 text-primary font-bold px-2.5 py-0.5 rounded-full uppercase font-mono">
+                    Doador Certificado Fome Zero
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 space-y-3 text-xs border-t border-outline-variant/10">
+                <div className="flex justify-between py-1">
+                  <span className="text-on-surface-variant">Razão Social / Identificação</span>
+                  <span className="font-semibold text-on-surface">{user.name} S/A</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-on-surface-variant">E-mail Principal</span>
+                  <span className="font-semibold text-on-surface">{user.email}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-on-surface-variant">Endereço Comercial</span>
+                  <span className="font-semibold text-on-surface">Avenida das Nações Unidas, 1852</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-on-surface-variant">Status da Parceria</span>
+                  <span className="font-bold text-emerald-500 flex items-center gap-0.5">
+                    <Check className="w-3.5 h-3.5" />
+                    Parceiro Ouro
+                  </span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
       </AnimatePresence>
     </div>
   );
