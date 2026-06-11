@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { 
-  Heart, 
-  Utensils, 
-  PlusCircle, 
-  X, 
-  Calendar, 
+import {
+  Heart,
+  Utensils,
+  PlusCircle,
+  X,
+  Calendar,
   ArrowLeft,
   Sparkles,
   TrendingUp,
@@ -33,8 +33,8 @@ interface SupermarketViewProps {
   activeActorTab: 'supermercado' | 'relatorios' | 'perfil';
 }
 
-export default function SupermarketView({ 
-  alimentos, 
+export default function SupermarketView({
+  alimentos,
   onAddAlimento,
   user,
   activeColetas,
@@ -179,7 +179,7 @@ export default function SupermarketView({
   return (
     <div id="supermarket-view-root" className="space-y-6">
       <AnimatePresence mode="wait">
-        
+
         {/* Screen 5: Success Form view */}
         {showSuccess && (
           <motion.div
@@ -280,11 +280,10 @@ export default function SupermarketView({
                         key={cat.id}
                         type="button"
                         onClick={() => setCategoria(cat.id)}
-                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all cursor-pointer ${
-                          categoria === cat.id
-                            ? 'bg-primary-container border-2 border-primary text-[#161e00] shadow-sm transform scale-[1.03]'
-                            : 'bg-white border-outline-variant/30 hover:bg-surface-container text-on-surface-variant'
-                        }`}
+                        className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all cursor-pointer ${categoria === cat.id
+                          ? 'bg-primary-container border-2 border-primary text-[#161e00] shadow-sm transform scale-[1.03]'
+                          : 'bg-white border-outline-variant/30 hover:bg-surface-container text-on-surface-variant'
+                          }`}
                       >
                         <span className="text-2xl mb-1">{cat.icone}</span>
                         <span className="text-xs font-semibold">{cat.label}</span>
@@ -357,20 +356,11 @@ export default function SupermarketView({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <button
                 id="novo-item-col-btn"
-                onClick={handleOpenDrawer}
+                onClick={handleOpenFullForm}
                 className="w-full h-14 bg-primary text-[#161e00] font-extrabold rounded-xl flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-all cursor-pointer"
               >
                 <PlusCircle className="w-5 h-5" />
-                <span>Nova Doação Rápida</span>
-              </button>
-
-              <button
-                id="full-form-cadastre-btn"
-                onClick={handleOpenFullForm}
-                className="w-full h-14 bg-white border border-outline-variant/40 text-on-surface font-extrabold rounded-xl flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
-              >
-                <Award className="w-5 h-5 text-primary" />
-                <span>Formulário de Cadastro Bento</span>
+                <span>Formulário de Nova Doação</span>
               </button>
             </div>
 
@@ -388,7 +378,7 @@ export default function SupermarketView({
                   >
                     <div className="flex items-center justify-between pb-2 border-b border-outline-variant/10">
                       <h3 className="text-lg font-bold text-on-surface">Registrar Alimento</h3>
-                      <button 
+                      <button
                         onClick={() => setShowDrawer(false)}
                         className="p-1.5 bg-surface-container hover:bg-surface-container-high rounded-full cursor-pointer"
                       >
@@ -485,8 +475,8 @@ export default function SupermarketView({
 
               <div className="space-y-3 max-h-[220px] overflow-y-auto">
                 {myColetas.map((coleta) => (
-                  <div 
-                    key={coleta.id} 
+                  <div
+                    key={coleta.id}
                     className="bg-white border border-outline-variant/30 p-4 rounded-xl flex items-center justify-between shadow-xs"
                   >
                     <div>
@@ -527,7 +517,7 @@ export default function SupermarketView({
                         <h3 className="text-base font-bold text-on-surface">Validar QR Code de Retirada</h3>
                         <p className="text-[10px] text-on-surface-variant">ONG: {activeScanningColeta.supermercado} • Pedido #{activeScanningColeta.pedidoId}</p>
                       </div>
-                      <button 
+                      <button
                         onClick={() => setActiveScanningColeta(null)}
                         className="p-1 bg-surface-container hover:bg-surface-container-high rounded-full cursor-pointer"
                       >
@@ -570,11 +560,10 @@ export default function SupermarketView({
                       <button
                         onClick={() => handleConfirmarColeta(activeScanningColeta.id)}
                         disabled={!qrScanned}
-                        className={`w-full h-13 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${
-                          qrScanned 
-                            ? 'bg-primary text-[#161e00] cursor-pointer shadow-md active:scale-95' 
-                            : 'bg-surface-container-highest text-on-surface-variant/40 cursor-not-allowed border border-outline-variant/10'
-                        }`}
+                        className={`w-full h-13 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${qrScanned
+                          ? 'bg-primary text-[#161e00] cursor-pointer shadow-md active:scale-95'
+                          : 'bg-surface-container-highest text-on-surface-variant/40 cursor-not-allowed border border-outline-variant/10'
+                          }`}
                       >
                         <CheckCircle className="w-5 h-5" />
                         Confirmar Entrega de Alimentos

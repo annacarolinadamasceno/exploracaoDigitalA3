@@ -111,38 +111,78 @@ const INITIAL_ONGS: Ong[] = [
   }
 ];
 
+// Helper to parse need string and extract quantity, unit, and maximum withdrawal date locally
+function parseNeedLocal(needStr: string) {
+  let maxDate: string | null = null;
+  let cleanStr = needStr;
+  const dateMatch = needStr.match(/\(Retirar até:\s*([\d-]+)\)/);
+  if (dateMatch) {
+    maxDate = dateMatch[1].trim();
+    cleanStr = needStr.replace(/\s*\(Retirar até:\s*[\d-]+\)/, "").trim();
+  }
+
+  const parts = cleanStr.split(" - ");
+  if (parts.length >= 2) {
+    const name = parts[0].trim();
+    const qtyStr = parts[1].trim();
+    const qtyMatch = qtyStr.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/);
+    if (qtyMatch) {
+      const qty = parseFloat(qtyMatch[1]);
+      const unit = qtyMatch[2] ? qtyMatch[2].trim() : null;
+      return { name, qty, unit, maxDate };
+    }
+    return { name, qty: null, unit: null, maxDate };
+  }
+
+  return { name: cleanStr.trim(), qty: null, unit: null, maxDate };
+}
+
 // Silent matching algorithm that mimics backend API structure locally
 function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[] {
   const sortedOngs = [...ongsList].sort((a, b) => b.tempoSemDoacaoDias - a.tempoSemDoacaoDias);
   const results: any[] = [];
-  const usedAlimentos = new Set<string>();
+  
+  // Clone food array to track available quantities during allocation
+  const tempAlimentos = alimentosList.map(a => ({
+    ...a,
+    quantidadeRestante: a.quantidade
+  }));
 
   for (const ong of sortedOngs) {
     const items: any[] = [];
-    for (const item of alimentosList) {
-      if (item.status !== 'Pendente') continue;
-      if (usedAlimentos.has(item.id)) continue;
 
-      let ok = false;
-      for (const req of ong.necessidades) {
-        if (
-          item.categoria.toLowerCase().includes(req.toLowerCase()) ||
-          req.toLowerCase().includes(item.categoria.toLowerCase()) ||
-          item.nome.toLowerCase().includes(req.toLowerCase())
-        ) {
-          ok = true;
-          break;
+    for (const needStr of ong.necessidades) {
+      const { name: needName, qty: needQty, maxDate } = parseNeedLocal(needStr);
+      const lowerNeedName = needName.toLowerCase();
+
+      for (const item of tempAlimentos) {
+        if (item.status !== 'Pendente') continue;
+        if (item.quantidadeRestante <= 0) continue;
+
+        // Expiration date validation: food expiration date must be >= NGO's max withdrawal date
+        if (maxDate && item.validade && item.validade < maxDate) continue;
+
+        const foodName = item.nome.toLowerCase();
+        const foodCat = item.categoria.toLowerCase();
+
+        const nameMatches = foodName.includes(lowerNeedName) || lowerNeedName.includes(foodName);
+        const catMatches = foodCat.includes(lowerNeedName) || lowerNeedName.includes(foodCat);
+
+        if (nameMatches || catMatches) {
+          const qtyToAllocate = needQty !== null 
+            ? Math.min(needQty, item.quantidadeRestante) 
+            : item.quantidadeRestante;
+
+          if (qtyToAllocate > 0) {
+            item.quantidadeRestante -= qtyToAllocate;
+            items.push({
+              alimento_oferecido: item.nome,
+              categoria_correspondida: item.categoria,
+              quantidade: `${qtyToAllocate} ${item.unidade}`,
+              id_alimento: item.id
+            });
+          }
         }
-      }
-
-      if (ok) {
-        items.push({
-          alimento_oferecido: item.nome,
-          categoria_correspondida: item.categoria,
-          quantidade: `${item.quantidade} ${item.unidade}`,
-          id_alimento: item.id
-        });
-        usedAlimentos.add(item.id);
       }
     }
 
@@ -245,10 +285,34 @@ export default function App() {
   };
 
   // NGO reserves an item from active matches list
-  const handleReservarAlimento = (alimento: Alimento) => {
-    setAlimentos(prev => prev.map(item => 
-      item.id === alimento.id ? { ...item, status: 'Aguardando Coleta' } : item
-    ));
+  const handleReservarAlimento = (alimento: Alimento, quantidadeReservada?: number) => {
+    const qtyToReserve = quantidadeReservada !== undefined ? quantidadeReservada : alimento.quantidade;
+
+    // Update foods list (checking for split)
+    setAlimentos(prev => {
+      const target = prev.find(item => item.id === alimento.id);
+      if (!target) return prev;
+
+      if (qtyToReserve < target.quantidade) {
+        // Split: Create reserved portion, reduce the original item's quantity
+        const reservedItem: Alimento = {
+          ...target,
+          id: `alimento_res_${Date.now()}`,
+          quantidade: qtyToReserve,
+          status: 'Aguardando Coleta'
+        };
+        const remainingItem: Alimento = {
+          ...target,
+          quantidade: target.quantidade - qtyToReserve
+        };
+        return prev.map(item => item.id === alimento.id ? remainingItem : item).concat(reservedItem);
+      } else {
+        // Full reservation: just change status
+        return prev.map(item => 
+          item.id === alimento.id ? { ...item, status: 'Aguardando Coleta' } : item
+        );
+      }
+    });
 
     const newColeta: ColetaAtiva = {
       id: `coleta_${Date.now()}`,
@@ -256,7 +320,7 @@ export default function App() {
       supermercado: alimento.doador || 'Supermercado Silva',
       pedidoId: Math.floor(10000 + Math.random() * 90000).toString(),
       itens: [
-        { nome: alimento.nome, quantidade: `${alimento.quantidade} ${alimento.unidade}`, icone: 'shopping_basket' }
+        { nome: alimento.nome, quantidade: `${qtyToReserve} ${alimento.unidade}`, icone: 'shopping_basket' }
       ],
       dataRetirada: 'Hoje, às 18h30',
       status: 'Pendente'

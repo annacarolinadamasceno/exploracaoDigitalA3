@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  Heart, 
-  Mail, 
-  Lock, 
-  User, 
-  Building, 
+import {
+  Heart,
+  Mail,
+  Lock,
+  User,
+  Building,
   Sparkles,
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Phone,
+  FileText
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { supabase } from '../supabaseClient';
@@ -22,12 +24,14 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [cnpj, setCnpj] = useState('');
+  const [contato, setContato] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   // Check if Supabase is using real credentials
-  const isRealSupabase = 
+  const isRealSupabase =
     // @ts-ignore
-    import.meta.env.VITE_SUPABASE_URL && 
+    import.meta.env.VITE_SUPABASE_URL &&
     // @ts-ignore
     !import.meta.env.VITE_SUPABASE_URL.includes('your-supabase-project');
 
@@ -107,21 +111,25 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
           role: 'supermercado',
           email: 'doador@silva.com.br'
         });
-      } else if (email && password.length >= 6) {
+      } else if (!isRealSupabase && email && password.length >= 6) {
         onLoginSuccess({
           name: email.split('@')[0].toUpperCase(),
           role: email.includes('ong') ? 'ong' : 'supermercado',
           email: email
         });
       } else {
-        setErrorMsg('Credenciais inválidas. Use os botões de teste rápido ou cadastre-se com senha maior que 6 dígitos!');
+        setErrorMsg(isRealSupabase
+          ? 'Credenciais inválidas. Ajuste suas informações ou cadastre-se!'
+          : 'Credenciais inválidas. Ajuste suas informações ou cadastre-se!'
+        );
       }
+
 
     } else {
       // 1. ATTEMPT REAL SUPABASE REGISTRATION (if configured)
       if (isRealSupabase) {
         try {
-          if (!name || !email || !password) {
+          if (!name || !email || !password || !cnpj || !contato) {
             setErrorMsg('Por favor, preencha todos os campos obrigatórios.');
             return;
           }
@@ -132,7 +140,9 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
             options: {
               data: {
                 nome: name,
-                role: role
+                role: role,
+                cnpj: cnpj,
+                contato: contato
               }
             }
           });
@@ -156,7 +166,7 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
       }
 
       // 2. MOCK REGISTRATION FALLBACK
-      if (!name || !email || !password) {
+      if (!name || !email || !password || !cnpj || !contato) {
         setErrorMsg('Por favor, preencha todos os campos obrigatórios.');
         return;
       }
@@ -175,7 +185,7 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
 
   return (
     <div id="auth-viewport" className="min-h-screen w-full max-w-2xl mx-auto bg-white flex flex-col justify-center px-6 py-12 relative overflow-hidden border-x border-outline-variant">
-      
+
       {/* Background soft blurs for dynamic visual interest */}
       <div className="absolute top-[-10%] right-[-10%] w-72 h-72 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] w-72 h-72 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
@@ -195,28 +205,26 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
 
       {/* Auth Card Container */}
       <div className="w-full bg-surface-container/40 border border-outline-variant/30 rounded-3xl p-6 md:p-8 shadow-sm backdrop-blur-sm z-10 space-y-6">
-        
+
         {/* Tab Selector */}
         <div className="flex bg-surface-container-low p-1.5 rounded-2xl border border-outline-variant/30 relative">
           <button
             type="button"
             onClick={() => { setIsLogin(true); setErrorMsg(''); }}
-            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${
-              isLogin 
-                ? 'bg-primary text-[#161e00] shadow-sm' 
+            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${isLogin
+                ? 'bg-primary text-[#161e00] shadow-sm'
                 : 'text-on-surface-variant hover:text-on-surface'
-            }`}
+              }`}
           >
             Entrar
           </button>
           <button
             type="button"
             onClick={() => { setIsLogin(false); setErrorMsg(''); }}
-            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${
-              !isLogin 
-                ? 'bg-primary text-[#161e00] shadow-sm' 
+            className={`flex-1 py-3 text-sm font-bold rounded-xl transition-all ${!isLogin
+                ? 'bg-primary text-[#161e00] shadow-sm'
                 : 'text-on-surface-variant hover:text-on-surface'
-            }`}
+              }`}
           >
             Cadastrar-se
           </button>
@@ -231,25 +239,61 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
 
         {/* Main form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          
-          {/* Name Field (Sign Up Only) */}
+
+          {/* Name, CNPJ and Contato Fields (Sign Up Only) */}
           {!isLogin && (
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
-                Nome da Entidade / Estabelecimento
-              </label>
-              <div className="relative flex items-center">
-                <User className="absolute left-4 w-4 h-4 text-on-surface-variant/70" />
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Ex: Supermercado Silva, ONG Prato Cheio"
-                  className="w-full h-12 bg-white border border-outline-variant rounded-xl pl-11 pr-4 text-xs text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all placeholder:text-on-surface-variant/40 font-medium"
-                />
+            <>
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
+                  Nome da Entidade / Estabelecimento
+                </label>
+                <div className="relative flex items-center">
+                  <User className="absolute left-4 w-4 h-4 text-on-surface-variant/70" />
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Supermercado Silva, ONG Prato Cheio"
+                    className="w-full h-12 bg-white border border-outline-variant rounded-xl pl-11 pr-4 text-xs text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all placeholder:text-on-surface-variant/40 font-medium"
+                  />
+                </div>
               </div>
-            </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
+                  CNPJ
+                </label>
+                <div className="relative flex items-center">
+                  <FileText className="absolute left-4 w-4 h-4 text-on-surface-variant/70" />
+                  <input
+                    type="text"
+                    required
+                    value={cnpj}
+                    onChange={(e) => setCnpj(e.target.value)}
+                    placeholder="Ex: 00.000.000/0001-00"
+                    className="w-full h-12 bg-white border border-outline-variant rounded-xl pl-11 pr-4 text-xs text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all placeholder:text-on-surface-variant/40 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
+                  Contato (Telefone / WhatsApp)
+                </label>
+                <div className="relative flex items-center">
+                  <Phone className="absolute left-4 w-4 h-4 text-on-surface-variant/70" />
+                  <input
+                    type="text"
+                    required
+                    value={contato}
+                    onChange={(e) => setContato(e.target.value)}
+                    placeholder="Ex: (11) 99999-9999"
+                    className="w-full h-12 bg-white border border-outline-variant rounded-xl pl-11 pr-4 text-xs text-on-surface focus:ring-2 focus:ring-primary focus:border-primary transition-all placeholder:text-on-surface-variant/40 font-medium"
+                  />
+                </div>
+              </div>
+            </>
           )}
 
           {/* Email Field */}
@@ -299,11 +343,10 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
                 <button
                   type="button"
                   onClick={() => setRole('ong')}
-                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
-                    role === 'ong'
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${role === 'ong'
                       ? 'bg-primary-container border-primary text-[#161e00] shadow-sm transform scale-[1.02]'
                       : 'bg-white border-outline-variant hover:bg-surface-container-low text-on-surface-variant'
-                  }`}
+                    }`}
                 >
                   <Heart className={`w-7 h-7 mb-1.5 ${role === 'ong' ? 'fill-current text-primary' : 'text-on-surface-variant'}`} />
                   <span className="text-xs font-bold">ONG</span>
@@ -314,11 +357,10 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
                 <button
                   type="button"
                   onClick={() => setRole('supermercado')}
-                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
-                    role === 'supermercado'
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${role === 'supermercado'
                       ? 'bg-primary-container border-primary text-[#161e00] shadow-sm transform scale-[1.02]'
                       : 'bg-white border-outline-variant hover:bg-surface-container-low text-on-surface-variant'
-                  }`}
+                    }`}
                 >
                   <Building className={`w-7 h-7 mb-1.5 ${role === 'supermercado' ? 'text-primary' : 'text-on-surface-variant'}`} />
                   <span className="text-xs font-bold">Supermercado</span>
@@ -357,7 +399,7 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
             <Sparkles className="w-3.5 h-3.5 text-primary" />
             <span>Perfil ONG</span>
           </button>
-          
+
           <button
             type="button"
             onClick={() => handleQuickLogin('supermercado')}

@@ -52,7 +52,10 @@ export default function NgoView({
   const [selectedColeta, setSelectedColeta] = useState<ColetaAtiva | null>(null);
   
   // Custom states for needs management
-  const [newNeed, setNewNeed] = useState('');
+  const [needNome, setNeedNome] = useState('');
+  const [needQuantidade, setNeedQuantidade] = useState('');
+  const [needUnidade, setNeedUnidade] = useState('kg');
+  const [needDataMaxima, setNeedDataMaxima] = useState('');
   const [showAddNeedForm, setShowAddNeedForm] = useState(false);
 
   // Find this NGO's record in state to show their active registered needs
@@ -64,13 +67,16 @@ export default function NgoView({
 
   const handleAddNeed = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNeed.trim()) return;
+    if (!needNome.trim() || !needQuantidade || !needDataMaxima) return;
 
-    if (!necessidades.includes(newNeed.trim())) {
-      const updated = [...necessidades, newNeed.trim()];
+    const needStr = `${needNome.trim()} - ${needQuantidade} ${needUnidade} (Retirar até: ${needDataMaxima})`;
+    if (!necessidades.includes(needStr)) {
+      const updated = [...necessidades, needStr];
       onUpdateNecessidades(updated);
     }
-    setNewNeed('');
+    setNeedNome('');
+    setNeedQuantidade('');
+    setNeedDataMaxima('');
     setShowAddNeedForm(false);
   };
 
@@ -151,21 +157,69 @@ export default function NgoView({
 
               {/* Add Need Form */}
               {showAddNeedForm && (
-                <form onSubmit={handleAddNeed} className="flex gap-2 animate-fadeIn bg-white p-3 rounded-xl border border-outline-variant/30">
-                  <input
-                    type="text"
-                    required
-                    value={newNeed}
-                    onChange={(e) => setNewNeed(e.target.value)}
-                    placeholder="Ex: Cesta Básica, Laticínios, Legumes"
-                    className="flex-1 h-10 px-3 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40"
-                  />
-                  <button
-                    type="submit"
-                    className="h-10 bg-primary text-[#161e00] px-4 rounded-lg text-xs font-bold active:scale-95 transition-all cursor-pointer"
-                  >
-                    Salvar
-                  </button>
+                <form onSubmit={handleAddNeed} className="flex flex-col gap-3 animate-fadeIn bg-white p-4 rounded-xl border border-outline-variant/30">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Nome do Item</label>
+                      <input
+                        type="text"
+                        required
+                        value={needNome}
+                        onChange={(e) => setNeedNome(e.target.value)}
+                        placeholder="Ex: Arroz, Feijão, Leite"
+                        className="w-full h-10 px-3 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2 space-y-1">
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Quantidade</label>
+                        <input
+                          type="number"
+                          min="0.1"
+                          step="any"
+                          required
+                          value={needQuantidade}
+                          onChange={(e) => setNeedQuantidade(e.target.value)}
+                          placeholder="Ex: 4, 10"
+                          className="w-full h-10 px-3 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Unidade</label>
+                        <select
+                          value={needUnidade}
+                          onChange={(e) => setNeedUnidade(e.target.value)}
+                          className="w-full h-10 px-2 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary"
+                        >
+                          <option value="kg">kg</option>
+                          <option value="un">un</option>
+                          <option value="litros">l</option>
+                          <option value="pacotes">pct</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Data Limite de Retirada</label>
+                      <input
+                        type="date"
+                        required
+                        value={needDataMaxima}
+                        onChange={(e) => setNeedDataMaxima(e.target.value)}
+                        className="w-full h-10 px-3 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary"
+                      />
+                    </div>
+                    
+                    <button
+                      type="submit"
+                      className="h-10 bg-primary text-[#161e00] rounded-lg text-xs font-bold active:scale-95 transition-all cursor-pointer shadow-sm hover:bg-opacity-95"
+                    >
+                      Salvar Necessidade
+                    </button>
+                  </div>
                 </form>
               )}
 
@@ -253,7 +307,7 @@ export default function NgoView({
                                 
                                 {alOriginal && alOriginal.status === 'Pendente' ? (
                                   <button
-                                    onClick={() => onReservar(alOriginal)}
+                                    onClick={() => onReservar(alOriginal, parseFloat(item.quantidade))}
                                     className="bg-primary text-[#161e00] text-[10px] font-extrabold px-3 py-1.5 rounded-lg active:scale-95 transition-all cursor-pointer shadow-sm"
                                   >
                                     Reservar

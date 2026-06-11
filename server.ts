@@ -41,8 +41,9 @@ app.post("/api/match", async (req, res) => {
 
 Siga as REGRAS DE NEGÓCIO OBRIGATÓRIAS:
 1. Priorizar sempre as ONGs que possuem o maior tempo registrado desde a última doação recebida (valorizado na propriedade 'tempoSemDoacaoDias' de cada ONG).
-2. Fazer a correspondência exata ou por categoria lógica de alimentos (Ex: se um supermercado oferece 'Iogurte', você pode cruzar com uma ONG que necessita de 'Laticínios'. Se oferece 'Pão', cruze com 'Padaria' ou 'Cereais', etc.).
-3. Suas respostas devem conter estritamente a lista recomendada de correspondências no formato JSON definido pelo esquema.
+2. Fazer correspondência APENAS se a ONG tiver uma necessidade cadastrada que combine com o nome ou a categoria do alimento oferecido. Não distribua sobras de alimentos para ONGs que não tenham necessidade desse tipo de alimento cadastrada.
+3. Se a necessidade da ONG especificar uma quantidade (ex: "Arroz - 4kg" ou "Pão - 2kg"), você deve alocar apenas essa quantidade solicitada. Se o supermercado oferecer mais quantidade do que o necessário, a doação deve ser fracionada (dividida), e o que sobrar deve permanecer disponível para outras correspondências.
+4. Suas respostas devem conter estritamente a lista recomendada de correspondências no formato JSON definido pelo esquema.
 
 Estes são os alimentos disponíveis (doações de supermercados):
 ${JSON.stringify(alimentos, null, 2)}
@@ -138,91 +139,93 @@ Gere a melhor correspondência possível maximizando o atendimento das ONGs prio
   }
 });
 
+// Helper to parse need string and extract quantity, unit, and maximum withdrawal date
+function parseNeed(needStr: string) {
+  let maxDate: string | null = null;
+  let cleanStr = needStr;
+  const dateMatch = needStr.match(/\(Retirar até:\s*([\d-]+)\)/);
+  if (dateMatch) {
+    maxDate = dateMatch[1].trim();
+    cleanStr = needStr.replace(/\s*\(Retirar até:\s*[\d-]+\)/, "").trim();
+  }
+
+  const parts = cleanStr.split(" - ");
+  if (parts.length >= 2) {
+    const name = parts[0].trim();
+    const qtyStr = parts[1].trim();
+    const qtyMatch = qtyStr.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/);
+    if (qtyMatch) {
+      const qty = parseFloat(qtyMatch[1]);
+      const unit = qtyMatch[2] ? qtyMatch[2].trim() : null;
+      return { name, qty, unit, maxDate };
+    }
+    return { name, qty: null, unit: null, maxDate };
+  }
+
+  return { name: cleanStr.trim(), qty: null, unit: null, maxDate };
+}
+
 // Helper rule-engine for matching logic in pure JS/TS
 function simulateMatching(alimentos: any[], ongs: any[]): any[] {
-  // 1. Sort ONGs by weight of maximum days without donation (tempoSemDoacaoDias)
+  // 1. Sort ONGs by priority: weight of maximum days without donation (tempoSemDoacaoDias)
   const sortedOngs = [...ongs].sort((a, b) => b.tempoSemDoacaoDias - a.tempoSemDoacaoDias);
 
   const matched: any[] = [];
-  const allocatedAlimentos = new Set();
+  
+  // Clone food array to track available quantities during allocation
+  const tempAlimentos = alimentos.map(a => ({
+    ...a,
+    quantidadeRestante: typeof a.quantidade === 'number' ? a.quantidade : parseFloat(a.quantidade) || 0
+  }));
 
   for (const ong of sortedOngs) {
     const itemsAtendidos: any[] = [];
-    
-    // Check match logical categories
-    for (const alimento of alimentos) {
-      if (allocatedAlimentos.has(alimento.id)) continue;
 
-      let categoryMatches = false;
-      let matchedCategory = "";
+    for (const needStr of ong.necessidades) {
+      const { name: needName, qty: needQty, maxDate } = parseNeed(needStr);
+      const lowerNeedName = needName.toLowerCase();
 
-      // Exact match or logical relation mappings
-      const foodName = alimento.nome.toLowerCase();
-      const foodCat = alimento.categoria.toLowerCase();
+      for (const alimento of tempAlimentos) {
+        if (alimento.status !== 'Pendente') continue;
+        if (alimento.quantidadeRestante <= 0) continue;
 
-      for (const req of ong.necessidades) {
-        const requirement = req.toLowerCase();
+        // Expiration date validation: food expiration date must be >= NGO's max withdrawal date
+        if (maxDate && alimento.validade && alimento.validade < maxDate) continue;
 
-        // Standard mapping categories
-        if (
-          foodName.includes(requirement) ||
-          foodCat.includes(requirement) ||
-          requirement.includes(foodCat) ||
-          (foodCat === "padaria" && requirement.includes("cereais")) ||
-          (foodCat === "laticínios" && (foodName.includes("iogurte") || foodName.includes("leite") || requirement.includes("laticínios"))) ||
-          (foodCat === "frutas" && (foodName.includes("maçã") || requirement.includes("vegetais") || requirement.includes("frutas"))) ||
-          (foodCat === "proteína animal" && (foodName.includes("ovos") || foodName.includes("carne") || foodName.includes("frango") || requirement.includes("proteína")))
-        ) {
-          categoryMatches = true;
-          matchedCategory = req;
-          break;
+        // Strict mapping check:
+        // Match only if the need name matches the food name or food category
+        const foodName = alimento.nome.toLowerCase();
+        const foodCat = alimento.categoria.toLowerCase();
+
+        const nameMatches = foodName.includes(lowerNeedName) || lowerNeedName.includes(foodName);
+        const catMatches = foodCat.includes(lowerNeedName) || lowerNeedName.includes(foodCat);
+
+        if (nameMatches || catMatches) {
+          // Determine quantity to allocate
+          const qtyToAllocate = needQty !== null 
+            ? Math.min(needQty, alimento.quantidadeRestante) 
+            : alimento.quantidadeRestante;
+
+          if (qtyToAllocate > 0) {
+            alimento.quantidadeRestante -= qtyToAllocate;
+            itemsAtendidos.push({
+              alimento_oferecido: alimento.nome,
+              categoria_correspondida: alimento.categoria,
+              quantidade: `${qtyToAllocate} ${alimento.unidade}`,
+              id_alimento: alimento.id
+            });
+          }
         }
-      }
-
-      if (categoryMatches) {
-        itemsAtendidos.push({
-          alimento_oferecido: alimento.nome,
-          categoria_correspondida: matchedCategory || alimento.categoria,
-          quantidade: `${alimento.quantidade} ${alimento.unidade}`
-        });
-        // Allocate so others don't duplicate
-        allocatedAlimentos.add(alimento.id);
       }
     }
 
     if (itemsAtendidos.length > 0) {
       matched.push({
         nome_ong: ong.nome,
-        motivo_prioridade: `ONG Priorizada por possuir maior tempo de espera desde a última doação registrada (${ong.tempoSemDoacaoDias} dias sem doações, última recebida em ${ong.ultimaDoacao}). Mapeamento lógico realizado para atender as necessidades de: ${ong.necessidades.join(", ")}.`,
+        motivo_prioridade: `ONG Priorizada por possuir maior tempo de espera desde a última doação registrada (${ong.tempoSemDoacaoDias} dias sem doações). Mapeamento lógico realizado para atender as necessidades de: ${ong.necessidades.join(", ")}.`,
         itens_atendidos: itemsAtendidos,
         nivel_urgencia: ong.tempoSemDoacaoDias >= 15 ? "Crítico" : (ong.tempoSemDoacaoDias >= 10 ? "Alto" : "Médio")
       });
-    }
-  }
-
-  // Handle leftovers to ensure all donations have a match
-  for (const alimento of alimentos) {
-    if (allocatedAlimentos.add(alimento.id)) {
-      // Find any ONG that accepts "Outros" or has less restriction
-      const bestFittingOng = sortedOngs[0]; // oldest waiting ONG gets leftovers
-      if (bestFittingOng) {
-        // Find if this ONG already has an entry in matches
-        let existingMatch = matched.find(m => m.nome_ong === bestFittingOng.nome);
-        if (!existingMatch) {
-          existingMatch = {
-            nome_ong: bestFittingOng.nome,
-            motivo_prioridade: `Atendimento emergencial de item remanescente. ONG está na fila há ${bestFittingOng.tempoSemDoacaoDias} dias.`,
-            itens_atendidos: [],
-            nivel_urgencia: "Crítico"
-          };
-          matched.push(existingMatch);
-        }
-        existingMatch.itens_atendidos.push({
-          alimento_oferecido: alimento.nome,
-          categoria_correspondida: alimento.categoria,
-          quantidade: `${alimento.quantidade} ${alimento.unidade}`
-        });
-      }
     }
   }
 
