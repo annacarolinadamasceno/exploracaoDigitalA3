@@ -232,6 +232,8 @@ function simulateMatching(alimentos: any[], ongs: any[]): any[] {
   return matched;
 }
 
+export { app };
+
 async function startServer() {
   // Vite integration middleware for dev environment mode
   if (process.env.NODE_ENV !== "production") {
@@ -253,4 +255,7 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
+
