@@ -14,12 +14,28 @@ import {
   Award,
   PlusCircle,
   FileText,
-  UserCheck
+  UserCheck,
+  Loader2
 } from 'lucide-react';
-import { Alimento, Ong, ColetaAtiva } from './types';
+import { Alimento, Ong, ColetaAtiva, TransacaoHistorico } from './types';
 import NgoView from './components/NgoView';
 import SupermarketView from './components/SupermarketView';
 import AuthView from './components/AuthView';
+import {
+  fetchAlimentos,
+  seedAlimentos,
+  insertAlimento,
+  updateAlimentoStatus,
+  updateAlimentoQuantidade,
+  fetchColetasAtivas,
+  insertColeta,
+  deleteColeta,
+  fetchHistorico,
+  insertTransacao,
+  loadOngsFromStorage,
+  saveOngsToStorage,
+  getSessionUserId,
+} from './supabaseClient';
 
 // Mock initial foods
 const INITIAL_ALIMENTOS: Alimento[] = [
@@ -200,9 +216,10 @@ function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[
 }
 
 export default function App() {
-  const [alimentos, setAlimentos] = useState<Alimento[]>(INITIAL_ALIMENTOS);
-  const [ongs, setOngs] = useState<Ong[]>(INITIAL_ONGS);
+  const [alimentos, setAlimentos] = useState<Alimento[]>([]);
+  const [ongs, setOngs] = useState<Ong[]>([]);
   const [user, setUser] = useState<{ name: string; role: 'ong' | 'supermercado'; email: string } | null>(null);
+  const [loading, setLoading] = useState(true);
   
   // Tab switcher active state
   const [activeActor, setActiveActor] = useState<'ong' | 'supermercado' | 'relatorios' | 'perfil'>('ong');
@@ -211,19 +228,56 @@ export default function App() {
   const [matches, setMatches] = useState<any[]>([]);
 
   // Coletas tracking state
-  const [activeColetas, setActiveColetas] = useState<ColetaAtiva[]>([
-    {
-      id: 'coleta_1',
-      aberto: true,
-      supermercado: 'Supermercado Silva',
-      pedidoId: '88291',
-      itens: [
-        { nome: 'Pães Artesanais', quantidade: '15 un', icone: 'bakery_dining' }
-      ],
-      dataRetirada: 'Hoje, às 17h30',
-      status: 'Pendente'
+  const [activeColetas, setActiveColetas] = useState<ColetaAtiva[]>([]);
+
+  // Transaction history state
+  const [historico, setHistorico] = useState<TransacaoHistorico[]>([]);
+
+  // ---------------------------------------------------------------------------
+  // Initial data load from Supabase on mount
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    async function loadAllData() {
+      setLoading(true);
+      try {
+        // Parallel fetch of all persistent data
+        const [alimentosData, coletasData, historicoData] = await Promise.all([
+          fetchAlimentos(),
+          fetchColetasAtivas(),
+          fetchHistorico(),
+        ]);
+
+        // Alimentos: seed DB if empty
+        if (alimentosData.length === 0) {
+          const seeded = await seedAlimentos(INITIAL_ALIMENTOS);
+          setAlimentos(seeded);
+        } else {
+          setAlimentos(alimentosData);
+        }
+
+        setActiveColetas(coletasData);
+        setHistorico(historicoData);
+
+        // ONGs: load from localStorage, seed if empty
+        const storedOngs = loadOngsFromStorage<Ong>();
+        if (storedOngs.length === 0) {
+          setOngs(INITIAL_ONGS);
+          saveOngsToStorage(INITIAL_ONGS);
+        } else {
+          setOngs(storedOngs);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar dados do Supabase:', err);
+        // Fallback para dados locais se o banco falhar
+        setAlimentos(INITIAL_ALIMENTOS);
+        setOngs(INITIAL_ONGS);
+      } finally {
+        setLoading(false);
+      }
     }
-  ]);
+
+    loadAllData();
+  }, []);
 
   // Recalculate matches silently whenever food inventory or needs change
   const recalculateMatchesSilently = async (currentAlimentos: Alimento[], currentOngs: Ong[]) => {
@@ -255,25 +309,24 @@ export default function App() {
   const handleLogin = (loggedInUser: { name: string; role: 'ong' | 'supermercado'; email: string }) => {
     setUser(loggedInUser);
     
-    // Automatically match or create the user in ONGs/Supermarkets database simulation
     if (loggedInUser.role === 'ong') {
       setActiveActor('ong');
-      // If NGO doesn't exist, add it
+      // If ONG doesn't exist in localStorage, add it
       setOngs(prev => {
         if (prev.some(o => o.nome.toLowerCase() === loggedInUser.name.toLowerCase())) return prev;
-        return [
-          {
-            id: `ong_${Date.now()}`,
-            nome: loggedInUser.name,
-            necessidades: ['Padaria', 'Frutas'],
-            tempoSemDoacaoDias: 12,
-            ultimaDoacao: '15/05/2026',
-            nivelUrgencia: 'Alto',
-            tempoSegundosSimulado: 1036800,
-            endereco: 'Localizada no Centro'
-          },
-          ...prev
-        ];
+        const newOng: Ong = {
+          id: `ong_${Date.now()}`,
+          nome: loggedInUser.name,
+          necessidades: ['Padaria', 'Frutas'],
+          tempoSemDoacaoDias: 12,
+          ultimaDoacao: '15/05/2026',
+          nivelUrgencia: 'Alto',
+          tempoSegundosSimulado: 1036800,
+          endereco: 'Localizada no Centro'
+        };
+        const updated = [newOng, ...prev];
+        saveOngsToStorage(updated); // persist new ONG to localStorage
+        return updated;
       });
     } else {
       setActiveActor('supermercado');
@@ -285,34 +338,45 @@ export default function App() {
   };
 
   // NGO reserves an item from active matches list
-  const handleReservarAlimento = (alimento: Alimento, quantidadeReservada?: number) => {
+  const handleReservarAlimento = async (alimento: Alimento, quantidadeReservada?: number) => {
     const qtyToReserve = quantidadeReservada !== undefined ? quantidadeReservada : alimento.quantidade;
+    const isSplit = qtyToReserve < alimento.quantidade;
 
-    // Update foods list (checking for split)
-    setAlimentos(prev => {
-      const target = prev.find(item => item.id === alimento.id);
-      if (!target) return prev;
+    const ongName = user ? user.name : 'ONG';
+    let reservedId = alimento.id;
 
-      if (qtyToReserve < target.quantidade) {
-        // Split: Create reserved portion, reduce the original item's quantity
-        const reservedItem: Alimento = {
-          ...target,
-          id: `alimento_res_${Date.now()}`,
+    if (isSplit) {
+      // Reduce original in DB
+      const newQty = alimento.quantidade - qtyToReserve;
+      await updateAlimentoQuantidade(alimento.id, newQty);
+
+      // Insert the reserved portion into DB
+      const reservedData = await insertAlimento(
+        { ...alimento, quantidade: qtyToReserve, status: 'Aguardando Coleta' },
+        getSessionUserId(alimento.doador || 'seed')
+      );
+      reservedId = reservedData?.id || `alimento_res_${Date.now()}`;
+
+      // Update local state
+      setAlimentos(prev => {
+        const remaining: Alimento = { ...alimento, quantidade: newQty };
+        const reserved: Alimento = {
+          ...alimento,
+          id: reservedId,
           quantidade: qtyToReserve,
           status: 'Aguardando Coleta'
         };
-        const remainingItem: Alimento = {
-          ...target,
-          quantidade: target.quantidade - qtyToReserve
-        };
-        return prev.map(item => item.id === alimento.id ? remainingItem : item).concat(reservedItem);
-      } else {
-        // Full reservation: just change status
-        return prev.map(item => 
-          item.id === alimento.id ? { ...item, status: 'Aguardando Coleta' } : item
-        );
-      }
-    });
+        return prev
+          .map(item => item.id === alimento.id ? remaining : item)
+          .concat(reserved);
+      });
+    } else {
+      // Full reservation
+      await updateAlimentoStatus(alimento.id, 'Aguardando Coleta');
+      setAlimentos(prev =>
+        prev.map(item => item.id === alimento.id ? { ...item, status: 'Aguardando Coleta' } : item)
+      );
+    }
 
     const newColeta: ColetaAtiva = {
       id: `coleta_${Date.now()}`,
@@ -323,58 +387,141 @@ export default function App() {
         { nome: alimento.nome, quantidade: `${qtyToReserve} ${alimento.unidade}`, icone: 'shopping_basket' }
       ],
       dataRetirada: 'Hoje, às 18h30',
-      status: 'Pendente'
+      status: 'Pendente',
+      id_alimento: reservedId,
+      nomeOng: ongName
     };
 
+    await insertColeta(newColeta);
     setActiveColetas(prev => [newColeta, ...prev]);
   };
 
-  // Supermarket confirms collection of active coleta (replaces NGO finalizing)
-  const handleFinalizarColeta = (coletaId: string) => {
+  // Supermarket confirms collection of active coleta and records transaction
+  const handleFinalizarColeta = async (coletaId: string) => {
     const targetColeta = activeColetas.find(c => c.id === coletaId);
     if (!targetColeta) return;
 
-    // Mark coleta completed
+    // Remove coleta from DB
+    await deleteColeta(coletaId);
     setActiveColetas(prev => prev.filter(c => c.id !== coletaId));
 
-    // Update food items that match this coleta
+    // Update food status to Coletado in DB
+    const alimentoId = targetColeta.id_alimento;
+    if (alimentoId) {
+      await updateAlimentoStatus(alimentoId, 'Coletado');
+    }
     const itemNames = targetColeta.itens.map(i => i.nome.toLowerCase());
     setAlimentos(prev => prev.map(item => {
-      if (itemNames.some(name => item.nome.toLowerCase().includes(name))) {
+      if (item.id === alimentoId || itemNames.some(n => item.nome.toLowerCase().includes(n))) {
         return { ...item, status: 'Coletado' };
       }
       return item;
     }));
+
+    // Insert transactions in DB
+    const newTransacoes: TransacaoHistorico[] = targetColeta.itens.map(it => ({
+      id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      dataRegistro: new Date().toISOString(),
+      item: it.nome,
+      quantidade: it.quantidade,
+      supermercado: targetColeta.supermercado,
+      ong: targetColeta.nomeOng || 'ONG',
+      status: 'Concluída' as const,
+      pedidoId: targetColeta.pedidoId
+    }));
+    await Promise.all(newTransacoes.map(tx => insertTransacao(tx)));
+    setHistorico(prev => [...newTransacoes, ...prev]);
   };
 
-  // Adding new food supply as supermarket manager
-  const handleAddAlimento = (newItem: Omit<Alimento, 'id' | 'status'>) => {
-    const fresh: Alimento = {
+  // Reverts pending coleta, returns food items to pool and records cancellation
+  const handleCancelarColeta = async (coletaId: string) => {
+    const targetColeta = activeColetas.find(c => c.id === coletaId);
+    if (!targetColeta) return;
+
+    // Remove coleta from DB
+    await deleteColeta(coletaId);
+    setActiveColetas(prev => prev.filter(c => c.id !== coletaId));
+
+    // Revert alimento status back to Pendente in DB
+    const alimentoId = targetColeta.id_alimento;
+    if (alimentoId) {
+      await updateAlimentoStatus(alimentoId, 'Pendente');
+    }
+    setAlimentos(prev => prev.map(item => {
+      const matchesColetaItem = targetColeta.itens.some(it => it.nome === item.nome) && item.doador === targetColeta.supermercado;
+      const shouldRevert =
+        (alimentoId && item.id === alimentoId) ||
+        (!alimentoId && matchesColetaItem && item.status === 'Aguardando Coleta');
+      return shouldRevert ? { ...item, status: 'Pendente' } : item;
+    }));
+
+    // Insert cancellation in DB
+    const cancelTransacoes: TransacaoHistorico[] = targetColeta.itens.map(it => ({
+      id: `tx_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      dataRegistro: new Date().toISOString(),
+      item: it.nome,
+      quantidade: it.quantidade,
+      supermercado: targetColeta.supermercado,
+      ong: targetColeta.nomeOng || 'ONG',
+      status: 'Cancelada' as const,
+      pedidoId: targetColeta.pedidoId
+    }));
+    await Promise.all(cancelTransacoes.map(tx => insertTransacao(tx)));
+    setHistorico(prev => [...cancelTransacoes, ...prev]);
+  };
+
+  // Adding new food supply as supermarket manager — persists to Supabase
+  const handleAddAlimento = async (newItem: Omit<Alimento, 'id' | 'status'>) => {
+    const supermercadoId = user ? getSessionUserId(user.name) : '11111111-1111-4111-8111-111111111111';
+    const withMeta: Omit<Alimento, 'id'> = {
       ...newItem,
-      id: `alimento_${Date.now()}`,
       status: 'Pendente',
       tempoExpiraHora: 8,
       doador: user ? user.name : 'Supermercado Silva',
       distanciaKm: 1.2
     };
 
-    setAlimentos(prev => [fresh, ...prev]);
+    const saved = await insertAlimento(withMeta, supermercadoId);
+    if (saved) {
+      setAlimentos(prev => [saved, ...prev]);
+    } else {
+      // Fallback local if DB fails
+      const fallback: Alimento = { ...withMeta, id: `alimento_${Date.now()}` };
+      setAlimentos(prev => [fallback, ...prev]);
+    }
   };
 
-  // NGO updates/registers their needs list
+  // NGO updates/registers their needs list — persists to localStorage
   const handleUpdateNecessidades = (newNecessidades: string[]) => {
     if (!user) return;
-    setOngs(prev => prev.map(ong => {
-      if (ong.nome.toLowerCase() === user.name.toLowerCase()) {
-        return { ...ong, necessidades: newNecessidades };
-      }
-      return ong;
-    }));
+    setOngs(prev => {
+      const updated = prev.map(ong => {
+        if (ong.nome.toLowerCase() === user.name.toLowerCase()) {
+          return { ...ong, necessidades: newNecessidades };
+        }
+        return ong;
+      });
+      saveOngsToStorage(updated); // persist
+      return updated;
+    });
   };
 
   // If user is not logged in, render AuthView
   if (!user) {
     return <AuthView onLoginSuccess={handleLogin} />;
+  }
+
+  // Loading screen while fetching Supabase data
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
+        <div className="w-16 h-16 rounded-full bg-primary-container flex items-center justify-center shadow-lg">
+          <Heart className="w-8 h-8 text-primary fill-current" />
+        </div>
+        <Loader2 className="w-6 h-6 text-primary animate-spin" />
+        <p className="text-sm font-semibold text-on-surface-variant">Carregando dados do sistema...</p>
+      </div>
+    );
   }
 
   // Profile icon mapping
@@ -442,27 +589,28 @@ export default function App() {
               onReservar={handleReservarAlimento}
               activeColetas={activeColetas}
               onFinalizarColeta={handleFinalizarColeta}
+              onCancelarColeta={handleCancelarColeta}
               onNavigateToTab={(tab) => {
                 if (tab === 'home') setActiveActor('ong');
                 else if (tab === 'retirada') setActiveActor('ong');
               }}
-              // Passing new states
               user={user}
               ongs={ongs}
               matches={matches}
               onUpdateNecessidades={handleUpdateNecessidades}
               activeActorTab={activeActor}
+              historico={historico}
             />
           ) : (
             <SupermarketView 
               alimentos={alimentos}
               onAddAlimento={handleAddAlimento}
-              // Passing new states
               user={user}
               activeColetas={activeColetas}
               onFinalizarColeta={handleFinalizarColeta}
               matches={matches}
               activeActorTab={activeActor}
+              historico={historico}
             />
           )}
         </main>

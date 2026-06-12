@@ -19,7 +19,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Alimento, ColetaAtiva } from '../types';
+import { Alimento, ColetaAtiva, TransacaoHistorico } from '../types';
 import { downloadReportPDF } from '../utils/ReportGenerator';
 
 interface SupermarketViewProps {
@@ -31,6 +31,7 @@ interface SupermarketViewProps {
   onFinalizarColeta: (coletaId: string) => void;
   matches: any[];
   activeActorTab: 'supermercado' | 'relatorios' | 'perfil';
+  historico: TransacaoHistorico[];
 }
 
 export default function SupermarketView({
@@ -40,7 +41,8 @@ export default function SupermarketView({
   activeColetas,
   onFinalizarColeta,
   matches,
-  activeActorTab
+  activeActorTab,
+  historico
 }: SupermarketViewProps) {
   const [showDrawer, setShowDrawer] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
@@ -136,43 +138,29 @@ export default function SupermarketView({
     setQrScanned(false);
   };
 
-  // Generate PDF donation report
+  // Generate PDF donation report from real transaction history
   const handleExportPDF = () => {
+    const myHistorico = historico.filter(tx => tx.supermercado.toLowerCase() === user.name.toLowerCase());
+    const concluidas = myHistorico.filter(tx => tx.status === 'Concluída');
+    const totalItens = concluidas.length;
     const reportData = {
       title: `Relatório de Doações - ${user.name}`,
       userName: user.name,
       userRole: 'supermercado' as const,
       userEmail: user.email,
       stats: [
-        { label: 'Total Doado', value: '1.240 kg' },
-        { label: 'Doações Concluídas', value: '42 coletas' },
-        { label: 'Impacto Estimado', value: '2.480 refeições' }
+        { label: 'Total de Doações Concluídas', value: `${totalItens} entregas` },
+        { label: 'Cancelamentos', value: `${myHistorico.length - totalItens}` },
+        { label: 'ONGs Beneficiadas', value: `${new Set(concluidas.map(tx => tx.ong)).size}` }
       ],
-      history: [
-        {
-          date: new Date().toLocaleDateString('pt-BR'),
-          item: 'Frutas da Cesta Estação',
-          quantity: '20 kg',
-          partner: 'ONG Lar da Esperança',
-          status: 'Pendente'
-        },
-        {
-          date: '24/05/2026',
-          item: 'Caixas de Leite',
-          quantity: '48 un',
-          partner: 'ONG Lar da Esperança',
-          status: 'Concluída'
-        },
-        {
-          date: '18/05/2026',
-          item: 'Pães Artesanais',
-          quantity: '15 un',
-          partner: 'ONG Mesa Unida',
-          status: 'Concluída'
-        }
-      ]
+      history: myHistorico.map(tx => ({
+        date: new Date(tx.dataRegistro).toLocaleDateString('pt-BR'),
+        item: tx.item,
+        quantity: tx.quantidade,
+        partner: tx.ong,
+        status: tx.status
+      }))
     };
-
     downloadReportPDF(reportData);
   };
 
@@ -645,32 +633,82 @@ export default function SupermarketView({
               <p className="text-xs text-on-surface-variant">Acompanhe o impacto sustentável das suas doações e baixe o certificado.</p>
             </div>
 
-            {/* Dashboard metrics */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
-                <Heart className="w-5 h-5 text-primary fill-current" />
-                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mt-1">Total Salvo</p>
-                <p className="text-2xl font-black text-primary">1.240 kg</p>
-              </div>
-              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
-                <Utensils className="w-5 h-5 text-primary" />
-                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mt-1">Refeições Geradas</p>
-                <p className="text-2xl font-black text-primary">2.480 pratos</p>
-              </div>
-            </div>
+            {/* Dashboard metrics from real data */}
+            {(() => {
+              const myHistorico = historico.filter(tx => tx.supermercado.toLowerCase() === user.name.toLowerCase());
+              const concluidas = myHistorico.filter(tx => tx.status === 'Concluída');
+              const ongsBeneficiadas = new Set(concluidas.map(tx => tx.ong)).size;
+              return (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                    <Heart className="w-4 h-4 text-primary fill-current" />
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Concluídas</p>
+                    <p className="text-xl font-black text-primary">{concluidas.length}</p>
+                  </div>
+                  <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                    <TrendingUp className="w-4 h-4 text-primary" />
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Total</p>
+                    <p className="text-xl font-black text-primary">{myHistorico.length}</p>
+                  </div>
+                  <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                    <Award className="w-4 h-4 text-primary" />
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">ONGs</p>
+                    <p className="text-xl font-black text-primary">{ongsBeneficiadas}</p>
+                  </div>
+                </div>
+              );
+            })()}
 
-            {/* Goal Progress widget */}
-            <div className="bg-surface-container rounded-2xl p-5 border border-outline-variant/10 flex flex-col justify-between shadow-sm">
-              <div className="flex justify-between items-center text-xs">
-                <span className="font-bold text-on-surface">Meta de Doação Semanal</span>
-                <span className="font-bold text-primary">75%</span>
+            {/* Transaction History Table */}
+            <div className="bg-surface-container rounded-2xl border border-outline-variant/10 overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant/15">
+                <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider">Histórico de Transações</h3>
+                <span className="text-[9px] font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full uppercase">
+                  {historico.filter(tx => tx.supermercado.toLowerCase() === user.name.toLowerCase()).length} registros
+                </span>
               </div>
-              <div className="w-full h-3 bg-surface-container-highest rounded-full overflow-hidden my-3">
-                <div className="h-full bg-primary rounded-full" style={{ width: '75%' }}></div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-surface-container-high">
+                      <th className="text-left px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Data</th>
+                      <th className="text-left px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Item Doado</th>
+                      <th className="text-left px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Qtd</th>
+                      <th className="text-left px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">ONG</th>
+                      <th className="text-right px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historico
+                      .filter(tx => tx.supermercado.toLowerCase() === user.name.toLowerCase())
+                      .map(tx => (
+                        <tr key={tx.id} className="border-t border-outline-variant/10 hover:bg-surface-container-high/50 transition-colors">
+                          <td className="px-4 py-3 text-on-surface-variant">{new Date(tx.dataRegistro).toLocaleDateString('pt-BR')}</td>
+                          <td className="px-4 py-3 font-semibold text-on-surface">{tx.item}</td>
+                          <td className="px-4 py-3 font-bold text-primary">{tx.quantidade}</td>
+                          <td className="px-4 py-3 text-on-surface-variant">{tx.ong}</td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                              tx.status === 'Concluída'
+                                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-200/50'
+                                : 'bg-rose-500/10 text-rose-600 border border-rose-200/50'
+                            }`}>
+                              {tx.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    }
+                    {historico.filter(tx => tx.supermercado.toLowerCase() === user.name.toLowerCase()).length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-xs text-on-surface-variant/60 italic">
+                          Nenhuma doação registrada ainda. Confirme as entregas para gerar o histórico!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <p className="text-xs text-on-surface-variant text-center leading-relaxed">
-                Faltam 45kg para atingir a meta! As doações evitam desperdício e geram créditos sociais.
-              </p>
             </div>
 
             {/* Export Card */}

@@ -42,4 +42,18 @@ export interface ColetaAtiva {
   itens: { nome: string; quantidade: string; icone: string }[];
   dataRetirada: string;
   status: 'Pendente' | 'Concluída';
+  id_alimento?: string;
+  nomeOng?: string;
 }
+
+export interface TransacaoHistorico {
+  id: string;
+  dataRegistro: string; // ISO string
+  item: string;
+  quantidade: string;
+  supermercado: string;
+  ong: string;
+  status: 'Concluída' | 'Cancelada';
+  pedidoId: string;
+}
+

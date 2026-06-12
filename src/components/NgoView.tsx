@@ -19,21 +19,22 @@ import {
   Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Alimento, ColetaAtiva, Ong } from '../types';
+import { Alimento, ColetaAtiva, Ong, TransacaoHistorico } from '../types';
 import { downloadReportPDF } from '../utils/ReportGenerator';
 
 interface NgoViewProps {
   alimentos: Alimento[];
-  onReservar: (alimento: Alimento) => void;
+  onReservar: (alimento: Alimento, quantidadeReservada?: number) => void;
   activeColetas: ColetaAtiva[];
   onFinalizarColeta: (coletaId: string) => void;
+  onCancelarColeta: (coletaId: string) => void;
   onNavigateToTab: (tab: 'home' | 'retirada' | 'perfil') => void;
-  // New auth & state integration props
   user: { name: string; email: string };
   ongs: Ong[];
   matches: any[];
   onUpdateNecessidades: (newNecessidades: string[]) => void;
   activeActorTab: 'ong' | 'relatorios' | 'perfil';
+  historico: TransacaoHistorico[];
 }
 
 export default function NgoView({ 
@@ -41,12 +42,14 @@ export default function NgoView({
   onReservar, 
   activeColetas, 
   onFinalizarColeta,
+  onCancelarColeta,
   onNavigateToTab,
   user,
   ongs,
   matches,
   onUpdateNecessidades,
-  activeActorTab
+  activeActorTab,
+  historico
 }: NgoViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedColeta, setSelectedColeta] = useState<ColetaAtiva | null>(null);
@@ -85,43 +88,28 @@ export default function NgoView({
     onUpdateNecessidades(updated);
   };
 
-  // Generate PDF received report
+  // Generate PDF received report from real transaction history
   const handleExportPDF = () => {
+    const myHistorico = historico.filter(tx => tx.ong.toLowerCase() === user.name.toLowerCase());
+    const concluidas = myHistorico.filter(tx => tx.status === 'Concluída');
     const reportData = {
-      title: `Relatório de Recebidos - ${user.name}`,
+      title: `Relatório de Recebimentos - ${user.name}`,
       userName: user.name,
       userRole: 'ong' as const,
       userEmail: user.email,
       stats: [
-        { label: 'Doações Recebidas', value: `${activeColetas.length + 14} entregas` },
-        { label: 'Alimentos Salvos', value: '412 kg' },
-        { label: 'Pessoas Alimentadas', value: '824 refeições' }
+        { label: 'Doações Recebidas', value: `${concluidas.length} entregas` },
+        { label: 'Supermercados Parceiros', value: `${new Set(concluidas.map(tx => tx.supermercado)).size}` },
+        { label: 'Cancelamentos', value: `${myHistorico.length - concluidas.length}` }
       ],
-      history: [
-        {
-          date: new Date().toLocaleDateString('pt-BR'),
-          item: 'Pães Artesanais',
-          quantity: '15 un',
-          partner: 'Supermercado Silva',
-          status: 'Aguardando Coleta'
-        },
-        {
-          date: '24/05/2026',
-          item: 'Caixas de Leite',
-          quantity: '48 un',
-          partner: 'Express Market',
-          status: 'Coletado'
-        },
-        {
-          date: '18/05/2026',
-          item: 'Ovos Tipo A',
-          quantity: '10 dz',
-          partner: 'Mercado do Porto',
-          status: 'Coletado'
-        }
-      ]
+      history: myHistorico.map(tx => ({
+        date: new Date(tx.dataRegistro).toLocaleDateString('pt-BR'),
+        item: tx.item,
+        quantity: tx.quantidade,
+        partner: tx.supermercado,
+        status: tx.status
+      }))
     };
-
     downloadReportPDF(reportData);
   };
 
@@ -435,6 +423,21 @@ export default function NgoView({
                 💡 **Logística Real**: Ao chegar no mercado, apresente esta tela. O gerente do supermercado usará o leitor do painel dele para ler seu QR Code e confirmar a liberação.
               </p>
             </div>
+
+            {/* Cancel Reservation Action */}
+            <button
+              id="cancel-reservation-btn"
+              onClick={() => {
+                if (window.confirm("Deseja realmente cancelar esta retirada pendente? O item voltará a ficar disponível para outras ONGs.")) {
+                  onCancelarColeta(selectedColeta.id);
+                  setSelectedColeta(null);
+                }
+              }}
+              className="w-full h-12 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer shadow-md mt-4 text-xs uppercase"
+            >
+              <X className="w-4 h-4" />
+              Cancelar Retirada Pendente
+            </button>
           </motion.div>
         )}
 
@@ -452,17 +455,81 @@ export default function NgoView({
               <p className="text-xs text-on-surface-variant">Monitore e faça o download dos alimentos recebidos e famílias alimentadas.</p>
             </div>
 
-            {/* Metrics Dashboard */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
-                <TrendingUp className="w-5 h-5 text-primary" />
-                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mt-1">Refeições Providas</p>
-                <p className="text-2xl font-black text-primary">824 pratos</p>
+            {/* Metrics from real data */}
+            {(() => {
+              const myHistorico = historico.filter(tx => tx.ong.toLowerCase() === user.name.toLowerCase());
+              const concluidas = myHistorico.filter(tx => tx.status === 'Concluída');
+              const supermercados = new Set(concluidas.map(tx => tx.supermercado)).size;
+              return (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                    <TrendingUp className="w-4 h-4 text-primary" />
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Recebidos</p>
+                    <p className="text-xl font-black text-primary">{concluidas.length}</p>
+                  </div>
+                  <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                    <Heart className="w-4 h-4 text-primary fill-current" />
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Total</p>
+                    <p className="text-xl font-black text-primary">{myHistorico.length}</p>
+                  </div>
+                  <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                    <Store className="w-4 h-4 text-primary" />
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Mercados</p>
+                    <p className="text-xl font-black text-primary">{supermercados}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Transaction History Table for ONG */}
+            <div className="bg-surface-container rounded-2xl border border-outline-variant/10 overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant/15">
+                <h3 className="text-xs font-bold text-on-surface uppercase tracking-wider">Histórico de Recebimentos</h3>
+                <span className="text-[9px] font-bold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full uppercase">
+                  {historico.filter(tx => tx.ong.toLowerCase() === user.name.toLowerCase()).length} registros
+                </span>
               </div>
-              <div className="bg-surface-container p-5 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
-                <Heart className="w-5 h-5 text-primary fill-current" />
-                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mt-1">Alimentos Salvos</p>
-                <p className="text-2xl font-black text-primary">412 kg</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-surface-container-high">
+                      <th className="text-left px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Data</th>
+                      <th className="text-left px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Item</th>
+                      <th className="text-left px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Qtd</th>
+                      <th className="text-left px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Supermercado</th>
+                      <th className="text-right px-4 py-2.5 font-bold text-on-surface-variant uppercase text-[9px] tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historico
+                      .filter(tx => tx.ong.toLowerCase() === user.name.toLowerCase())
+                      .map(tx => (
+                        <tr key={tx.id} className="border-t border-outline-variant/10 hover:bg-surface-container-high/50 transition-colors">
+                          <td className="px-4 py-3 text-on-surface-variant">{new Date(tx.dataRegistro).toLocaleDateString('pt-BR')}</td>
+                          <td className="px-4 py-3 font-semibold text-on-surface">{tx.item}</td>
+                          <td className="px-4 py-3 font-bold text-primary">{tx.quantidade}</td>
+                          <td className="px-4 py-3 text-on-surface-variant">{tx.supermercado}</td>
+                          <td className="px-4 py-3 text-right">
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                              tx.status === 'Concluída'
+                                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-200/50'
+                                : 'bg-rose-500/10 text-rose-600 border border-rose-200/50'
+                            }`}>
+                              {tx.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    }
+                    {historico.filter(tx => tx.ong.toLowerCase() === user.name.toLowerCase()).length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-xs text-on-surface-variant/60 italic">
+                          Nenhum recebimento registrado ainda. Reserve itens e confirme as retiradas!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
