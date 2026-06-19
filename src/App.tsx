@@ -98,7 +98,7 @@ function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[
 export default function App() {
   const [alimentos, setAlimentos] = useState<Alimento[]>([]);
   const [ongs, setOngs] = useState<Ong[]>([]);
-  const [user, setUser] = useState<{ name: string; role: 'ong' | 'supermercado'; email: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: 'ong' | 'supermercado'; email: string; id?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   
   // Tab switcher active state
@@ -339,7 +339,8 @@ export default function App() {
 
   // Adding new food supply as supermarket manager — persists to Supabase
   const handleAddAlimento = async (newItem: Omit<Alimento, 'id' | 'status'>) => {
-    const supermercadoId = user ? getSessionUserId(user.name) : '11111111-1111-4111-8111-111111111111';
+    // Use real Supabase Auth user ID if available (avoids FK violation with localStorage UUID)
+    const supermercadoId = (user && user.id) ? user.id : (user ? getSessionUserId(user.name) : '11111111-1111-4111-8111-111111111111');
     const withMeta: Omit<Alimento, 'id'> = {
       ...newItem,
       status: 'Pendente',

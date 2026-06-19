@@ -15,7 +15,7 @@ import { motion } from 'motion/react';
 import { supabase } from '../supabaseClient';
 
 interface AuthViewProps {
-  onLoginSuccess: (user: { name: string; role: 'ong' | 'supermercado'; email: string }) => void;
+  onLoginSuccess: (user: { name: string; role: 'ong' | 'supermercado'; email: string; id?: string }) => void;
 }
 
 export default function AuthView({ onLoginSuccess }: AuthViewProps) {
@@ -80,13 +80,15 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
               onLoginSuccess({
                 name: email.split('@')[0].toUpperCase(),
                 role: email.includes('ong') ? 'ong' : 'supermercado',
-                email: email
+                email: email,
+                id: data.user.id
               });
             } else {
               onLoginSuccess({
                 name: profile.nome,
                 role: profile.role as 'ong' | 'supermercado',
-                email: email
+                email: email,
+                id: data.user.id
               });
             }
             return; // Success
