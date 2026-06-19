@@ -4,21 +4,16 @@ import { Alimento, ColetaAtiva, TransacaoHistorico } from './types';
 // ---------------------------------------------------------------------------
 // Env setup (Vite / Next.js / Node)
 // ---------------------------------------------------------------------------
-const getEnv = (key: string): string => {
-  if (typeof process !== 'undefined' && process.env) {
-    if (process.env[key]) return process.env[key]!;
-    if (process.env[`NEXT_PUBLIC_${key}`]) return process.env[`NEXT_PUBLIC_${key}`]!;
-  }
-  // @ts-ignore
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    // @ts-ignore
-    if (import.meta.env[`VITE_${key}`]) return import.meta.env[`VITE_${key}`];
-  }
-  return '';
-};
+// Statically look up environment variables so Vite's compiler can replace them at build-time.
+const supabaseUrl = 
+  (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL) || 
+  (typeof process !== 'undefined' && process.env && process.env.SUPABASE_URL) || 
+  '';
 
-const supabaseUrl = getEnv('SUPABASE_URL');
-const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY');
+const supabaseAnonKey = 
+  (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_ANON_KEY) || 
+  (typeof process !== 'undefined' && process.env && process.env.SUPABASE_ANON_KEY) || 
+  '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('⚠️ Supabase URL ou Anon Key não encontradas nas variáveis de ambiente.');
