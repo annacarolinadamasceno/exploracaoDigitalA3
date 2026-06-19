@@ -73,6 +73,7 @@ export default function OngView({
 
   // B7: nullcheck para evitar erro se nome_ong for undefined
   const myMatches = matches.filter(m => m?.nome_ong?.toLowerCase() === user.name.toLowerCase());
+  const myColetas = activeColetas.filter(c => c.nomeOng?.toLowerCase() === user.name.toLowerCase());
 
   const handleAddNeed = (e: React.FormEvent) => {
     e.preventDefault();
@@ -396,15 +397,15 @@ export default function OngView({
             </div>
 
             {/* Active Bookings (QR Code notification) */}
-            {activeColetas.length > 0 && (
+            {myColetas.length > 0 && (
               <div id="booking-notification" className="bg-primary-container/20 border border-primary-container/30 rounded-2xl p-4 flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-sm font-bold text-on-surface">Você possui {activeColetas.length} retirada(s) pendente(s)</p>
+                  <p className="text-sm font-bold text-on-surface">Você possui {myColetas.length} retirada(s) pendente(s)</p>
                   <p className="text-[10px] text-on-surface-variant">Apresente o QR Code no mercado para liberar a doação.</p>
                 </div>
                 <button
                   id="view-coleta-btn"
-                  onClick={() => setSelectedColeta(activeColetas[0])}
+                  onClick={() => setSelectedColeta(myColetas[0])}
                   className="bg-primary text-[#161e00] px-4 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all shadow-sm cursor-pointer"
                 >
                   Ver QR Code

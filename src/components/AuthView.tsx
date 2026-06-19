@@ -5,9 +5,7 @@ import {
   Lock,
   User,
   Building,
-  Sparkles,
   ArrowRight,
-  ShieldCheck,
   Phone,
   FileText
 } from 'lucide-react';
@@ -34,24 +32,6 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
     import.meta.env.VITE_SUPABASE_URL &&
     // @ts-ignore
     !import.meta.env.VITE_SUPABASE_URL.includes('your-supabase-project');
-
-  // Quick credentials for testing
-  const handleQuickLogin = (type: 'ong' | 'supermercado') => {
-    if (type === 'ong') {
-      onLoginSuccess({
-        name: 'ONG Mesa Unida',
-        role: 'ong',
-        email: 'ong@fomezero.org'
-      });
-    } else {
-      onLoginSuccess({
-        name: 'Supermercado Silva',
-        role: 'supermercado',
-        email: 'doador@silva.com.br'
-      });
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -140,6 +120,7 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
             email,
             password,
             options: {
+              emailRedirectTo: window.location.origin,
               data: {
                 nome: name,
                 role: role,
@@ -152,6 +133,15 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
           if (error) throw error;
 
           if (data && data.user) {
+            // Check if user needs to confirm email
+            const isConfirmed = !!data.user.email_confirmed_at || !!data.user.confirmed_at;
+            
+            if (!isConfirmed) {
+              setErrorMsg('Cadastro realizado! Enviamos um e-mail de confirmação. Por favor, verifique sua caixa de entrada para confirmar sua conta.');
+              setIsLogin(true); // Switch to login view
+              return;
+            }
+
             // Success! Real trigger on database will automatically register this in public.perfis_usuarios
             onLoginSuccess({
               name: name,
@@ -381,36 +371,6 @@ export default function AuthView({ onLoginSuccess }: AuthViewProps) {
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
-
-        {/* Quick Testing Badges Header */}
-        <div className="relative flex py-2 items-center">
-          <div className="flex-grow border-t border-outline-variant/40"></div>
-          <span className="flex-shrink mx-4 text-[9px] text-on-surface-variant font-bold uppercase tracking-widest">
-            Acesso Rápido de Teste
-          </span>
-          <div className="flex-grow border-t border-outline-variant/40"></div>
-        </div>
-
-        {/* Quick Access Grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => handleQuickLogin('ong')}
-            className="h-10 bg-surface-container-low border border-outline-variant/35 rounded-xl text-[10px] font-bold text-on-surface flex items-center justify-center gap-1.5 hover:bg-surface-container-high transition-colors active:scale-95 cursor-pointer"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
-            <span>Perfil ONG</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleQuickLogin('supermercado')}
-            className="h-10 bg-surface-container-low border border-outline-variant/35 rounded-xl text-[10px] font-bold text-on-surface flex items-center justify-center gap-1.5 hover:bg-surface-container-high transition-colors active:scale-95 cursor-pointer"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-            <span>Perfil Doador</span>
-          </button>
-        </div>
 
       </div>
 
