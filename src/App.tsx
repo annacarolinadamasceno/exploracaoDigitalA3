@@ -18,7 +18,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { Alimento, Ong, ColetaAtiva, TransacaoHistorico } from './types';
-import NgoView from './components/NgoView';
+import OngView from './components/OngView';
 import SupermarketView from './components/SupermarketView';
 import AuthView from './components/AuthView';
 import {
@@ -36,124 +36,9 @@ import {
   saveOngsToStorage,
   getSessionUserId,
 } from './supabaseClient';
+import { isSemanticMatch, parseNeed } from './categories';
 
-// Mock initial foods
-const INITIAL_ALIMENTOS: Alimento[] = [
-  {
-    id: 'paes',
-    nome: 'Pães Artesanais',
-    categoria: 'Padaria',
-    quantidade: 15,
-    unidade: 'un',
-    validade: '2026-06-02',
-    status: 'Pendente',
-    tempoExpiraHora: 4,
-    doador: 'Supermercado Silva',
-    distanciaKm: 1.2,
-    tipoIcone: 'bakery_dining'
-  },
-  {
-    id: 'leite',
-    nome: 'Caixas de Leite',
-    categoria: 'Laticínios',
-    quantidade: 48,
-    unidade: 'un',
-    validade: '2026-06-15',
-    status: 'Coletado',
-    tempoExpiraHora: 12,
-    doador: 'Express Market',
-    distanciaKm: 3.5,
-    tipoIcone: 'nutrition'
-  },
-  {
-    id: 'ovos',
-    nome: 'Ovos Tipo A',
-    categoria: 'Proteína Animal',
-    quantidade: 10,
-    unidade: 'dz',
-    validade: '2026-06-05',
-    status: 'Pendente',
-    tempoExpiraHora: 2,
-    doador: 'Mercado do Porto',
-    distanciaKm: 0.8,
-    tipoIcone: 'egg'
-  },
-  {
-    id: 'silva_frutas',
-    nome: 'Frutas da Cesta Estação',
-    categoria: 'Frutas',
-    quantidade: 20,
-    unidade: 'kg',
-    validade: '2026-06-01',
-    status: 'Pendente',
-    tempoExpiraHora: 4,
-    doador: 'Supermercado Silva',
-    distanciaKm: 1.2,
-    tipoIcone: 'nutrition'
-  }
-];
-
-// Mock initial ONGs and needs
-const INITIAL_ONGS: Ong[] = [
-  {
-    id: 'ong_1',
-    nome: 'ONG Mesa Unida',
-    necessidades: ['Padaria', 'Frutas'],
-    tempoSemDoacaoDias: 20, // Oldest, highest priority
-    ultimaDoacao: '02/05/2026',
-    nivelUrgencia: 'Crítico',
-    tempoSegundosSimulado: 1728000,
-    endereco: '1.2km de distância'
-  },
-  {
-    id: 'ong_2',
-    nome: 'ONG Lar da Esperança',
-    necessidades: ['Proteína Animal', 'Laticínios'],
-    tempoSemDoacaoDias: 15,
-    ultimaDoacao: '07/05/2026',
-    nivelUrgencia: 'Crítico',
-    tempoSegundosSimulado: 1296000,
-    endereco: '0.8km de distância'
-  },
-  {
-    id: 'ong_3',
-    nome: 'ONG Anjos Urbanos',
-    necessidades: ['Congelados'],
-    tempoSemDoacaoDias: 8,
-    ultimaDoacao: '14/05/2026',
-    nivelUrgencia: 'Alto',
-    tempoSegundosSimulado: 691200,
-    endereco: '3.5km de distância'
-  }
-];
-
-// Helper to parse need string and extract quantity, unit, and maximum withdrawal date locally
-function parseNeedLocal(needStr: string) {
-  let maxDate: string | null = null;
-  let cleanStr = needStr;
-  const dateMatch = needStr.match(/\(Retirar até:\s*([\d-]+)\)/);
-  if (dateMatch) {
-    maxDate = dateMatch[1].trim();
-    cleanStr = needStr.replace(/\s*\(Retirar até:\s*[\d-]+\)/, "").trim();
-  }
-
-  const parts = cleanStr.split(" - ");
-  if (parts.length >= 2) {
-    const name = parts[0].trim();
-    const qtyStr = parts[1].trim();
-    const qtyMatch = qtyStr.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/);
-    if (qtyMatch) {
-      const qty = parseFloat(qtyMatch[1]);
-      const unit = qtyMatch[2] ? qtyMatch[2].trim() : null;
-      return { name, qty, unit, maxDate };
-    }
-    return { name, qty: null, unit: null, maxDate };
-  }
-
-  return { name: cleanStr.trim(), qty: null, unit: null, maxDate };
-}
-
-// Silent matching algorithm that mimics backend API structure locally
+// Silent matching algorithm that mimics backend API structure locally using semantic matching
 function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[] {
   const sortedOngs = [...ongsList].sort((a, b) => b.tempoSemDoacaoDias - a.tempoSemDoacaoDias);
   const results: any[] = [];
@@ -168,8 +53,7 @@ function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[
     const items: any[] = [];
 
     for (const needStr of ong.necessidades) {
-      const { name: needName, qty: needQty, maxDate } = parseNeedLocal(needStr);
-      const lowerNeedName = needName.toLowerCase();
+      const { name: needName, category: needCategory, qty: needQty, maxDate } = parseNeed(needStr);
 
       for (const item of tempAlimentos) {
         if (item.status !== 'Pendente') continue;
@@ -178,13 +62,9 @@ function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[
         // Expiration date validation: food expiration date must be >= NGO's max withdrawal date
         if (maxDate && item.validade && item.validade < maxDate) continue;
 
-        const foodName = item.nome.toLowerCase();
-        const foodCat = item.categoria.toLowerCase();
+        const isMatch = isSemanticMatch(item.nome, item.categoria, needName, needCategory);
 
-        const nameMatches = foodName.includes(lowerNeedName) || lowerNeedName.includes(foodName);
-        const catMatches = foodCat.includes(lowerNeedName) || lowerNeedName.includes(foodCat);
-
-        if (nameMatches || catMatches) {
+        if (isMatch) {
           const qtyToAllocate = needQty !== null 
             ? Math.min(needQty, item.quantidadeRestante) 
             : item.quantidadeRestante;
@@ -205,7 +85,7 @@ function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[
     if (items.length > 0) {
       results.push({
         nome_ong: ong.nome,
-        motivo_prioridade: `ONG Priorizada por IA por possuir o maior tempo de espera desde a última doação registrada (${ong.tempoSemDoacaoDias} dias sem doações). Mapeamento lógico realizado para atender as necessidades de: ${ong.necessidades.join(", ")}.`,
+        motivo_prioridade: `ONG Priorizada por IA por possuir o maior tempo de espera desde a última doação registrada (${ong.tempoSemDoacaoDias} dias sem doações). Mapeamento lógico realizado para atender as necessidades de: ${ong.necessidades.map(n => parseNeed(n).name).join(", ")}.`,
         itens_atendidos: items,
         nivel_urgencia: ong.tempoSemDoacaoDias >= 15 ? 'Crítico' : (ong.tempoSemDoacaoDias >= 10 ? 'Alto' : 'Médio')
       });
@@ -247,30 +127,17 @@ export default function App() {
           fetchHistorico(),
         ]);
 
-        // Alimentos: seed DB if empty
-        if (alimentosData.length === 0) {
-          const seeded = await seedAlimentos(INITIAL_ALIMENTOS);
-          setAlimentos(seeded);
-        } else {
-          setAlimentos(alimentosData);
-        }
-
+        setAlimentos(alimentosData);
         setActiveColetas(coletasData);
         setHistorico(historicoData);
 
-        // ONGs: load from localStorage, seed if empty
+        // ONGs: load from localStorage
         const storedOngs = loadOngsFromStorage<Ong>();
-        if (storedOngs.length === 0) {
-          setOngs(INITIAL_ONGS);
-          saveOngsToStorage(INITIAL_ONGS);
-        } else {
-          setOngs(storedOngs);
-        }
+        setOngs(storedOngs);
       } catch (err) {
         console.error('Erro ao carregar dados do Supabase:', err);
-        // Fallback para dados locais se o banco falhar
-        setAlimentos(INITIAL_ALIMENTOS);
-        setOngs(INITIAL_ONGS);
+        setAlimentos([]);
+        setOngs([]);
       } finally {
         setLoading(false);
       }
@@ -317,12 +184,12 @@ export default function App() {
         const newOng: Ong = {
           id: `ong_${Date.now()}`,
           nome: loggedInUser.name,
-          necessidades: ['Padaria', 'Frutas'],
-          tempoSemDoacaoDias: 12,
-          ultimaDoacao: '15/05/2026',
-          nivelUrgencia: 'Alto',
-          tempoSegundosSimulado: 1036800,
-          endereco: 'Localizada no Centro'
+          necessidades: [],
+          tempoSemDoacaoDias: 0,
+          ultimaDoacao: 'Nenhuma',
+          nivelUrgencia: 'Baixo',
+          tempoSegundosSimulado: 0,
+          endereco: 'Endereço não cadastrado'
         };
         const updated = [newOng, ...prev];
         saveOngsToStorage(updated); // persist new ONG to localStorage
@@ -584,7 +451,7 @@ export default function App() {
         {/* Main Content Area */}
         <main className="flex-1 p-6 space-y-6 bg-white">
           {user.role === 'ong' ? (
-            <NgoView 
+            <OngView 
               alimentos={alimentos}
               onReservar={handleReservarAlimento}
               activeColetas={activeColetas}

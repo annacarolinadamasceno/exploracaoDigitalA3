@@ -21,6 +21,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Alimento, ColetaAtiva, TransacaoHistorico } from '../types';
 import { downloadReportPDF } from '../utils/ReportGenerator';
+import { FOOD_CATEGORIES } from '../categories';
 
 interface SupermarketViewProps {
   alimentos: Alimento[];
@@ -55,19 +56,12 @@ export default function SupermarketView({
 
   // Form states
   const [nome, setNome] = useState('');
-  const [categoria, setCategoria] = useState('Frutas');
+  const [categoria, setCategoria] = useState(FOOD_CATEGORIES[0].id);
   const [validade, setValidade] = useState('');
   const [quantidade, setQuantidade] = useState<number>(0);
   const [unidade, setUnidade] = useState('Quilogramas (kg)');
 
-  const categoryOptions = [
-    { id: 'Padaria', label: 'Padaria', icone: '🥖' },
-    { id: 'Frutas', label: 'Frutas', icone: '🍎' },
-    { id: 'Laticínios', label: 'Laticínios', icone: '🥛' },
-    { id: 'Bebidas', label: 'Bebidas', icone: '🥤' },
-    { id: 'Enlatados', label: 'Enlatados', icone: '🥫' },
-    { id: 'Outros', label: 'Outros', icone: '📦' },
-  ];
+  const categoryOptions = FOOD_CATEGORIES;
 
   // Filter food inventory to show only the ones registered by THIS Supermarket
   const myAlimentos = alimentos.filter(a => !a.doador || a.doador.toLowerCase() === user.name.toLowerCase());

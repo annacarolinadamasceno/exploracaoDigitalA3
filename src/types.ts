@@ -1,7 +1,7 @@
 export interface Alimento {
   id: string;
   nome: string;
-  categoria: 'Padaria' | 'Frutas' | 'Laticínios' | 'Bebidas' | 'Enlatados' | 'Outros' | string;
+  categoria: string;
   quantidade: number;
   unidade: string;
   validade: string;

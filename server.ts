@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { isSemanticMatch, parseNeed } from "./src/categories";
 
 dotenv.config();
 
@@ -44,6 +45,9 @@ Siga as REGRAS DE NEGÓCIO OBRIGATÓRIAS:
 2. Fazer correspondência APENAS se a ONG tiver uma necessidade cadastrada que combine com o nome ou a categoria do alimento oferecido. Não distribua sobras de alimentos para ONGs que não tenham necessidade desse tipo de alimento cadastrada.
 3. Se a necessidade da ONG especificar uma quantidade (ex: "Arroz - 4kg" ou "Pão - 2kg"), você deve alocar apenas essa quantidade solicitada. Se o supermercado oferecer mais quantidade do que o necessário, a doação deve ser fracionada (dividida), e o que sobrar deve permanecer disponível para outras correspondências.
 4. Suas respostas devem conter estritamente a lista recomendada de correspondências no formato JSON definido pelo esquema.
+5. Você deve realizar correspondências semânticas e inteligentes mesmo que escritas com termos diferentes ou marcas. Por exemplo: se a ONG pede 'Leite', e o supermercado oferece 'Leite Integral' ou 'Leite Desnatado', você deve entender que atendem à necessidade da ONG.
+6. Se a ONG pede 'refrigerante' e o supermercado oferece 'Coca-cola' ou 'Fanta Laranja', você deve associar essas marcas/sabores ao termo genérico 'refrigerante' (pois são refrigerantes) e distribuir para atender a necessidade da ONG.
+7. As necessidades cadastradas das ONGs contêm o nome da categoria associada entre colchetes, por exemplo: 'refrigerante [Bebidas]' ou 'Leite [Laticínios, Ovos e Frios]'. Utilize tanto a categoria quanto o nome do item de forma inteligente para realizar o cruzamento semântico de forma robusta.
 
 Estes são os alimentos disponíveis (doações de supermercados):
 ${JSON.stringify(alimentos, null, 2)}
@@ -139,32 +143,6 @@ Gere a melhor correspondência possível maximizando o atendimento das ONGs prio
   }
 });
 
-// Helper to parse need string and extract quantity, unit, and maximum withdrawal date
-function parseNeed(needStr: string) {
-  let maxDate: string | null = null;
-  let cleanStr = needStr;
-  const dateMatch = needStr.match(/\(Retirar até:\s*([\d-]+)\)/);
-  if (dateMatch) {
-    maxDate = dateMatch[1].trim();
-    cleanStr = needStr.replace(/\s*\(Retirar até:\s*[\d-]+\)/, "").trim();
-  }
-
-  const parts = cleanStr.split(" - ");
-  if (parts.length >= 2) {
-    const name = parts[0].trim();
-    const qtyStr = parts[1].trim();
-    const qtyMatch = qtyStr.match(/^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?$/);
-    if (qtyMatch) {
-      const qty = parseFloat(qtyMatch[1]);
-      const unit = qtyMatch[2] ? qtyMatch[2].trim() : null;
-      return { name, qty, unit, maxDate };
-    }
-    return { name, qty: null, unit: null, maxDate };
-  }
-
-  return { name: cleanStr.trim(), qty: null, unit: null, maxDate };
-}
-
 // Helper rule-engine for matching logic in pure JS/TS
 function simulateMatching(alimentos: any[], ongs: any[]): any[] {
   // 1. Sort ONGs by priority: weight of maximum days without donation (tempoSemDoacaoDias)
@@ -182,8 +160,7 @@ function simulateMatching(alimentos: any[], ongs: any[]): any[] {
     const itemsAtendidos: any[] = [];
 
     for (const needStr of ong.necessidades) {
-      const { name: needName, qty: needQty, maxDate } = parseNeed(needStr);
-      const lowerNeedName = needName.toLowerCase();
+      const { name: needName, category: needCategory, qty: needQty, maxDate } = parseNeed(needStr);
 
       for (const alimento of tempAlimentos) {
         if (alimento.status !== 'Pendente') continue;
@@ -192,15 +169,9 @@ function simulateMatching(alimentos: any[], ongs: any[]): any[] {
         // Expiration date validation: food expiration date must be >= NGO's max withdrawal date
         if (maxDate && alimento.validade && alimento.validade < maxDate) continue;
 
-        // Strict mapping check:
-        // Match only if the need name matches the food name or food category
-        const foodName = alimento.nome.toLowerCase();
-        const foodCat = alimento.categoria.toLowerCase();
+        const isMatch = isSemanticMatch(alimento.nome || alimento.item, alimento.categoria, needName, needCategory);
 
-        const nameMatches = foodName.includes(lowerNeedName) || lowerNeedName.includes(foodName);
-        const catMatches = foodCat.includes(lowerNeedName) || lowerNeedName.includes(foodCat);
-
-        if (nameMatches || catMatches) {
+        if (isMatch) {
           // Determine quantity to allocate
           const qtyToAllocate = needQty !== null 
             ? Math.min(needQty, alimento.quantidadeRestante) 
@@ -209,7 +180,7 @@ function simulateMatching(alimentos: any[], ongs: any[]): any[] {
           if (qtyToAllocate > 0) {
             alimento.quantidadeRestante -= qtyToAllocate;
             itemsAtendidos.push({
-              alimento_oferecido: alimento.nome,
+              alimento_oferecido: alimento.nome || alimento.item,
               categoria_correspondida: alimento.categoria,
               quantidade: `${qtyToAllocate} ${alimento.unidade}`,
               id_alimento: alimento.id
@@ -222,7 +193,7 @@ function simulateMatching(alimentos: any[], ongs: any[]): any[] {
     if (itemsAtendidos.length > 0) {
       matched.push({
         nome_ong: ong.nome,
-        motivo_prioridade: `ONG Priorizada por possuir maior tempo de espera desde a última doação registrada (${ong.tempoSemDoacaoDias} dias sem doações). Mapeamento lógico realizado para atender as necessidades de: ${ong.necessidades.join(", ")}.`,
+        motivo_prioridade: `ONG Priorizada por possuir maior tempo de espera desde a última doação registrada (${ong.tempoSemDoacaoDias} dias sem doações). Mapeamento lógico realizado para atender as necessidades de: ${ong.necessidades.map(n => parseNeed(n).name).join(", ")}.`,
         itens_atendidos: itemsAtendidos,
         nivel_urgencia: ong.tempoSemDoacaoDias >= 15 ? "Crítico" : (ong.tempoSemDoacaoDias >= 10 ? "Alto" : "Médio")
       });

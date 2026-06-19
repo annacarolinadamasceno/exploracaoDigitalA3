@@ -21,8 +21,9 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { Alimento, ColetaAtiva, Ong, TransacaoHistorico } from '../types';
 import { downloadReportPDF } from '../utils/ReportGenerator';
+import { FOOD_CATEGORIES, parseNeed } from '../categories';
 
-interface NgoViewProps {
+interface OngViewProps {
   alimentos: Alimento[];
   onReservar: (alimento: Alimento, quantidadeReservada?: number) => void;
   activeColetas: ColetaAtiva[];
@@ -37,7 +38,7 @@ interface NgoViewProps {
   historico: TransacaoHistorico[];
 }
 
-export default function NgoView({ 
+export default function OngView({ 
   alimentos, 
   onReservar, 
   activeColetas, 
@@ -50,12 +51,13 @@ export default function NgoView({
   onUpdateNecessidades,
   activeActorTab,
   historico
-}: NgoViewProps) {
+}: OngViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedColeta, setSelectedColeta] = useState<ColetaAtiva | null>(null);
   
   // Custom states for needs management
   const [needNome, setNeedNome] = useState('');
+  const [needCategoria, setNeedCategoria] = useState(FOOD_CATEGORIES[0].id);
   const [needQuantidade, setNeedQuantidade] = useState('');
   const [needUnidade, setNeedUnidade] = useState('kg');
   const [needDataMaxima, setNeedDataMaxima] = useState('');
@@ -63,7 +65,7 @@ export default function NgoView({
 
   // Find this NGO's record in state to show their active registered needs
   const currentOng = ongs.find(o => o.nome.toLowerCase() === user.name.toLowerCase()) || ongs[0];
-  const necessidades = currentOng ? currentOng.necessidades : ['Padaria', 'Frutas'];
+  const necessidades = currentOng ? currentOng.necessidades : [];
 
   // Filter matches dynamically to show only the ones generated for THIS NGO
   const myMatches = matches.filter(m => m.nome_ong.toLowerCase() === user.name.toLowerCase());
@@ -72,12 +74,13 @@ export default function NgoView({
     e.preventDefault();
     if (!needNome.trim() || !needQuantidade || !needDataMaxima) return;
 
-    const needStr = `${needNome.trim()} - ${needQuantidade} ${needUnidade} (Retirar até: ${needDataMaxima})`;
+    const needStr = `${needNome.trim()} [${needCategoria}] - ${needQuantidade} ${needUnidade} (Retirar até: ${needDataMaxima})`;
     if (!necessidades.includes(needStr)) {
       const updated = [...necessidades, needStr];
       onUpdateNecessidades(updated);
     }
     setNeedNome('');
+    setNeedCategoria(FOOD_CATEGORIES[0].id);
     setNeedQuantidade('');
     setNeedDataMaxima('');
     setShowAddNeedForm(false);
@@ -158,7 +161,24 @@ export default function NgoView({
                         className="w-full h-10 px-3 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary placeholder:text-on-surface-variant/40"
                       />
                     </div>
-                    
+
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Categoria</label>
+                      <select
+                        value={needCategoria}
+                        onChange={(e) => setNeedCategoria(e.target.value)}
+                        className="w-full h-10 px-2 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary"
+                      >
+                        {FOOD_CATEGORIES.map(cat => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.icone} {cat.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div className="grid grid-cols-3 gap-2">
                       <div className="col-span-2 space-y-1">
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Quantidade</label>
@@ -213,21 +233,36 @@ export default function NgoView({
 
               {/* Needs Pills List */}
               <div className="flex flex-wrap gap-2 pt-1">
-                {necessidades.map((need, idx) => (
-                  <span 
-                    key={idx}
-                    className="px-3 py-1.5 bg-white border border-outline-variant/40 rounded-full text-xs font-semibold text-on-surface flex items-center gap-1.5"
-                  >
-                    <span>{need}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveNeed(need)}
-                      className="w-4 h-4 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                {necessidades.map((need, idx) => {
+                  const parsed = parseNeed(need);
+                  return (
+                    <span 
+                      key={idx}
+                      className="px-3 py-1.5 bg-white border border-outline-variant/40 rounded-full text-xs font-semibold text-on-surface flex items-center gap-1.5"
                     >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </span>
-                ))}
+                      <span>
+                        <strong>{parsed.name}</strong>
+                        {parsed.category && (
+                          <span className="text-[9px] bg-primary/20 text-[#856404] px-1.5 py-0.5 rounded ml-1.5">
+                            {parsed.category}
+                          </span>
+                        )}
+                        {parsed.qty && (
+                          <span className="text-on-surface-variant ml-1.5">
+                            - {parsed.qty} {parsed.unit}
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveNeed(need)}
+                        className="w-4 h-4 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-rose-500 hover:bg-rose-50 transition-colors"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  );
+                })}
                 {necessidades.length === 0 && (
                   <p className="text-xs text-on-surface-variant/60 italic py-2">Nenhuma necessidade cadastrada. Clique em Cadastrar!</p>
                 )}

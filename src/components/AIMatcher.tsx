@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Alimento, Ong, MatchResult } from '../types';
+import { isSemanticMatch, parseNeed } from '../categories';
 
 interface AIMatcherProps {
   alimentos: Alimento[];
@@ -72,42 +73,45 @@ export default function AIMatcher({ alimentos, ongs }: AIMatcherProps) {
   };
 
   const simulateMatchingLocal = (alimentosList: Alimento[], ongsList: Ong[]): MatchResult[] => {
-    // Exact logical fallbacks
     const sortedOngs = [...ongsList].sort((a, b) => b.tempoSemDoacaoDias - a.tempoSemDoacaoDias);
     const results: MatchResult[] = [];
-    const usedAlimentos = new Set<string>();
+    const tempAlimentos = alimentosList.map(a => ({
+      ...a,
+      quantidadeRestante: a.quantidade
+    }));
 
     for (const ong of sortedOngs) {
       const items: any[] = [];
-      for (const al in alimentosList) {
-        const item = alimentosList[al];
-        if (usedAlimentos.has(item.id)) continue;
+      for (const needStr of ong.necessidades) {
+        const { name: needName, category: needCategory, qty: needQty } = parseNeed(needStr);
+        
+        for (const item of tempAlimentos) {
+          if (item.status !== 'Pendente') continue;
+          if (item.quantidadeRestante <= 0) continue;
 
-        let ok = false;
-        ong.necessidades.forEach(req => {
-          if (
-            item.categoria.toLowerCase().includes(req.toLowerCase()) ||
-            req.toLowerCase().includes(item.categoria.toLowerCase()) ||
-            item.nome.toLowerCase().includes(req.toLowerCase())
-          ) {
-            ok = true;
+          const isMatch = isSemanticMatch(item.nome, item.categoria, needName, needCategory);
+
+          if (isMatch) {
+            const qtyToAllocate = needQty !== null 
+              ? Math.min(needQty, item.quantidadeRestante) 
+              : item.quantidadeRestante;
+
+            if (qtyToAllocate > 0) {
+              item.quantidadeRestante -= qtyToAllocate;
+              items.push({
+                alimento_oferecido: item.nome,
+                categoria_correspondida: item.categoria,
+                quantidade: `${qtyToAllocate} ${item.unidade}`
+              });
+            }
           }
-        });
-
-        if (ok) {
-          items.push({
-            alimento_oferecido: item.nome,
-            categoria_correspondida: item.categoria,
-            quantidade: `${item.quantidade} ${item.unidade}`
-          });
-          usedAlimentos.add(item.id);
         }
       }
 
       if (items.length > 0) {
         results.push({
           nome_ong: ong.nome,
-          motivo_prioridade: `ONG Priorizada devido ao elevado tempo sem doação recebida (${ong.tempoSemDoacaoDias} dias). Última recebida em: ${ong.ultimaDoacao}. Mapeamento lógico compatível com: ${ong.necessidades.join(', ')}.`,
+          motivo_prioridade: `ONG Priorizada devido ao elevado tempo sem doação recebida (${ong.tempoSemDoacaoDias} dias). Última recebida em: ${ong.ultimaDoacao}. Mapeamento lógico compatível com: ${ong.necessidades.map(n => parseNeed(n).name).join(', ')}.`,
           itens_atendidos: items,
           nivel_urgencia: ong.tempoSemDoacaoDias >= 15 ? 'Crítico' : 'Alto'
         });
