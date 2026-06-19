@@ -5,7 +5,7 @@ export interface Alimento {
   quantidade: number;
   unidade: string;
   validade: string;
-  status: 'Aguardando Coleta' | 'Coletado' | 'Pendente';
+  status: 'Aguardando Coleta' | 'Coletado' | 'Pendente' | 'Cancelado';
   tempoExpiraHora?: number;
   doador?: string;
   distanciaKm?: number;

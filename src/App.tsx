@@ -366,11 +366,11 @@ export default function App() {
     }
   };
 
-  // Supermarket cancels a pending donation — deletes from DB
+  // Supermarket cancels a pending donation — changes status to 'Cancelado'
   const handleCancelarAlimento = async (alimentoId: string) => {
-    const ok = await deleteAlimento(alimentoId);
+    const ok = await updateAlimentoStatus(alimentoId, 'Cancelado');
     if (ok) {
-      setAlimentos(prev => prev.filter(a => a.id !== alimentoId));
+      setAlimentos(prev => prev.map(a => a.id === alimentoId ? { ...a, status: 'Cancelado' } : a));
     } else {
       showError('Não foi possível cancelar a doação. Tente novamente.');
     }

@@ -229,13 +229,17 @@ export async function seedAlimentos(
 export async function updateAlimentoStatus(
   id: string,
   status: Alimento['status']
-): Promise<void> {
+): Promise<boolean> {
   const { error } = await supabase
     .from('doacoes_supermercado')
     .update({ status })
     .eq('id', id);
 
-  if (error) console.error('updateAlimentoStatus error:', error.message);
+  if (error) {
+    console.error('updateAlimentoStatus error:', error.message);
+    return false;
+  }
+  return true;
 }
 
 /** Atualiza a quantidade de um alimento. */

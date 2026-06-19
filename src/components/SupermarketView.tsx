@@ -64,6 +64,8 @@ function statusBadgeClass(status: string): string {
       return 'bg-amber-50 border-amber-200 text-amber-700';
     case 'Coletado':
       return 'bg-emerald-50 border-emerald-200 text-emerald-700';
+    case 'Cancelado':
+      return 'bg-rose-50 border-rose-200 text-rose-700';
     default: // Pendente
       return 'bg-slate-100 border-slate-300 text-slate-600';
   }
@@ -221,7 +223,7 @@ export default function SupermarketView({
       <ConfirmDialog
         open={confirmItem !== null}
         title={`Cancelar doação de "${confirmItem?.nome ?? ''}"?`}
-        message="O item será removido permanentemente do sistema e deixará de estar disponível para as ONGs."
+        message="O status do item será alterado para CANCELADO e deixará de estar disponível para as ONGs."
         confirmLabel="Sim, cancelar doação"
         cancelLabel="Manter doação"
         variant="danger"
