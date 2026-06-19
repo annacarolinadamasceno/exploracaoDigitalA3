@@ -61,8 +61,10 @@ function simulateMatchingLocal(alimentosList: Alimento[], ongsList: Ong[]): any[
         if (item.status !== 'Pendente') continue;
         if (item.quantidadeRestante <= 0) continue;
 
-        // Expiration date validation: food expiration date must be >= NGO's max withdrawal date
-        if (maxDate && item.validade && item.validade < maxDate) continue;
+        // Expiration date validation: food must not be expired relative to today, and need must not be expired
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (item.validade && item.validade < todayStr) continue;
+        if (maxDate && maxDate < todayStr) continue;
 
         const isMatch = isSemanticMatch(item.nome, item.categoria, needName, needCategory);
 

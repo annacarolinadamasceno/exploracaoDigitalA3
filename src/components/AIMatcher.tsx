@@ -83,11 +83,16 @@ export default function AIMatcher({ alimentos, ongs }: AIMatcherProps) {
     for (const ong of sortedOngs) {
       const items: any[] = [];
       for (const needStr of ong.necessidades) {
-        const { name: needName, category: needCategory, qty: needQty } = parseNeed(needStr);
+        const { name: needName, category: needCategory, qty: needQty, maxDate } = parseNeed(needStr);
         
         for (const item of tempAlimentos) {
           if (item.status !== 'Pendente') continue;
           if (item.quantidadeRestante <= 0) continue;
+
+          // Expiration date validation: food must not be expired relative to today, and need must not be expired
+          const todayStr = new Date().toISOString().split('T')[0];
+          if (item.validade && item.validade < todayStr) continue;
+          if (maxDate && maxDate < todayStr) continue;
 
           const isMatch = isSemanticMatch(item.nome, item.categoria, needName, needCategory);
 

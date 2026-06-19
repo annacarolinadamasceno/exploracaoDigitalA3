@@ -61,7 +61,7 @@ export function isSemanticMatch(
   }
 
   // 2. Category level match
-  if (normNeed === normFoodCat || (normNeedCat && normNeedCat === normFoodCat)) {
+  if (normNeed === normFoodCat) {
     return true;
   }
 

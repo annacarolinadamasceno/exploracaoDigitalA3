@@ -166,8 +166,10 @@ function simulateMatching(alimentos: any[], ongs: any[]): any[] {
         if (alimento.status !== 'Pendente') continue;
         if (alimento.quantidadeRestante <= 0) continue;
 
-        // Expiration date validation: food expiration date must be >= NGO's max withdrawal date
-        if (maxDate && alimento.validade && alimento.validade < maxDate) continue;
+        // Expiration date validation: food must not be expired relative to today, and need must not be expired
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (alimento.validade && alimento.validade < todayStr) continue;
+        if (maxDate && maxDate < todayStr) continue;
 
         const isMatch = isSemanticMatch(alimento.nome || alimento.item, alimento.categoria, needName, needCategory);
 
