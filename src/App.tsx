@@ -21,6 +21,7 @@ import { Alimento, Ong, ColetaAtiva, TransacaoHistorico } from './types';
 import OngView from './components/OngView';
 import SupermarketView from './components/SupermarketView';
 import AuthView from './components/AuthView';
+import { InlineAlert } from './components/AppDialog';
 import {
   fetchAlimentos,
   seedAlimentos,
@@ -415,12 +416,6 @@ export default function App() {
 
   return (
     <div id="app-viewport" className="min-h-screen bg-[#f3f4f6] text-on-surface flex flex-col items-center">
-      {/* Global Error Toast */}
-      {errorToast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-rose-600 text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 animate-fadeIn max-w-sm">
-          <span>⚠️ {errorToast}</span>
-        </div>
-      )}
       {/* Container wrapper mimicking clean mobile bento proportions */}
       <div id="mobile-container-frame" className="w-full max-w-2xl bg-white min-h-screen shadow-lg relative flex flex-col pb-32 border-x border-outline-variant">
         
@@ -470,6 +465,17 @@ export default function App() {
             {user.role === 'ong' ? 'Painel de Voluntariado' : 'Painel Doador'}
           </div>
         </div>
+
+        {/* Global Inline Error — aparece abaixo da barra de status */}
+        {errorToast && (
+          <div className="px-6 pt-3">
+            <InlineAlert
+              type="error"
+              message={errorToast}
+              onClose={() => setErrorToast(null)}
+            />
+          </div>
+        )}
 
         {/* Main Content Area */}
         <main className="flex-1 p-6 space-y-6 bg-white">

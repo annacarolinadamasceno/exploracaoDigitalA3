@@ -24,6 +24,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Alimento, ColetaAtiva, TransacaoHistorico } from '../types';
 import { downloadReportPDF } from '../utils/ReportGenerator';
 import { FOOD_CATEGORIES } from '../categories';
+import { ConfirmDialog } from './AppDialog';
 
 interface SupermarketViewProps {
   alimentos: Alimento[];
@@ -94,6 +95,9 @@ export default function SupermarketView({
   const [showFullForm, setShowFullForm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
+  // Estado para o diálogo de confirmação de cancelamento
+  const [confirmItem, setConfirmItem] = useState<Alimento | null>(null);
+
   // QR Code Scanner Simulation states
   const [activeScanningColeta, setActiveScanningColeta] = useState<ColetaAtiva | null>(null);
   const [qrScanned, setQrScanned] = useState(false);
@@ -159,11 +163,9 @@ export default function SupermarketView({
     setShowFullForm(true);
   };
 
-  // F1: Cancel a pending donation with confirmation
+  // F1: Cancel a pending donation — abre o ConfirmDialog in-app
   const handleCancelarDoacao = (item: Alimento) => {
-    if (window.confirm(`Cancelar a doação de "${item.nome}"?\n\nO item será removido permanentemente do sistema.`)) {
-      onCancelarAlimento(item.id);
-    }
+    setConfirmItem(item);
   };
 
   // Simulating QR Code Scanning action
@@ -215,6 +217,21 @@ export default function SupermarketView({
 
   return (
     <div id="supermarket-view-root" className="space-y-6">
+      {/* ConfirmDialog in-app — cancela doação */}
+      <ConfirmDialog
+        open={confirmItem !== null}
+        title={`Cancelar doação de "${confirmItem?.nome ?? ''}"?`}
+        message="O item será removido permanentemente do sistema e deixará de estar disponível para as ONGs."
+        confirmLabel="Sim, cancelar doação"
+        cancelLabel="Manter doação"
+        variant="danger"
+        onConfirm={() => {
+          if (confirmItem) onCancelarAlimento(confirmItem.id);
+          setConfirmItem(null);
+        }}
+        onCancel={() => setConfirmItem(null)}
+      />
+
       <AnimatePresence mode="wait">
 
         {/* Screen 5: Success Form view */}

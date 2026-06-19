@@ -22,6 +22,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Alimento, ColetaAtiva, Ong, TransacaoHistorico } from '../types';
 import { downloadReportPDF } from '../utils/ReportGenerator';
 import { FOOD_CATEGORIES, parseNeed } from '../categories';
+import { ConfirmDialog } from './AppDialog';
 
 interface OngViewProps {
   alimentos: Alimento[];
@@ -62,6 +63,9 @@ export default function OngView({
   const [needUnidade, setNeedUnidade] = useState('kg');
   const [needDataMaxima, setNeedDataMaxima] = useState('');
   const [showAddNeedForm, setShowAddNeedForm] = useState(false);
+
+  // Estado para o diálogo de confirmação de cancelamento de coleta
+  const [confirmColeta, setConfirmColeta] = useState<ColetaAtiva | null>(null);
 
   // B4: fallback seguro — não usar ongs[0] para evitar pegar ONG errada
   const currentOng = ongs.find(o => o.nome.toLowerCase() === user.name.toLowerCase()) ?? null;
@@ -118,6 +122,24 @@ export default function OngView({
 
   return (
     <div id="ngo-view-container" className="space-y-6">
+      {/* ConfirmDialog in-app — cancela retirada */}
+      <ConfirmDialog
+        open={confirmColeta !== null}
+        title="Cancelar esta retirada pendente?"
+        message="O item voltará a ficar disponível para outras ONGs. Esta ação não pode ser desfeita."
+        confirmLabel="Sim, cancelar retirada"
+        cancelLabel="Manter reserva"
+        variant="warning"
+        onConfirm={() => {
+          if (confirmColeta) {
+            onCancelarColeta(confirmColeta.id);
+            setSelectedColeta(null);
+          }
+          setConfirmColeta(null);
+        }}
+        onCancel={() => setConfirmColeta(null)}
+      />
+
       <AnimatePresence mode="wait">
         
         {/* TAB 1 & 2: NGO Active Panel (Necessidades e Matches) */}
@@ -478,13 +500,8 @@ export default function OngView({
             {/* Cancel Reservation Action */}
             <button
               id="cancel-reservation-btn"
-              onClick={() => {
-                if (window.confirm("Deseja realmente cancelar esta retirada pendente? O item voltará a ficar disponível para outras ONGs.")) {
-                  onCancelarColeta(selectedColeta.id);
-                  setSelectedColeta(null);
-                }
-              }}
-              className="w-full h-12 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer shadow-md mt-4 text-xs uppercase"
+              onClick={() => setConfirmColeta(selectedColeta)}
+              className="w-full h-12 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-extrabold rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer shadow-sm mt-4 text-xs uppercase"
             >
               <X className="w-4 h-4" />
               Cancelar Retirada Pendente
