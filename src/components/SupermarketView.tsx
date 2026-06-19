@@ -196,14 +196,19 @@ export default function SupermarketView({
     const myHistorico = historico.filter(tx => tx.supermercado.toLowerCase() === user.name.toLowerCase());
     const concluidas = myHistorico.filter(tx => tx.status === 'Concluída');
     const totalItens = concluidas.length;
+    const canceladosMercado = alimentos.filter(
+      a => (a.status === 'Cancelado') && (!a.doador || a.doador.toLowerCase() === user.name.toLowerCase())
+    ).length;
+
     const reportData = {
       title: `Relatório de Doações - ${user.name}`,
       userName: user.name,
       userRole: 'supermercado' as const,
       userEmail: user.email,
       stats: [
-        { label: 'Total de Doações Concluídas', value: `${totalItens} entregas` },
-        { label: 'Cancelamentos', value: `${myHistorico.length - totalItens}` },
+        { label: 'Doações Concluídas', value: `${totalItens} entregas` },
+        { label: 'Cancelado pela ONG', value: `${myHistorico.length - totalItens}` },
+        { label: 'Cancelado pelo Supermercado', value: `${canceladosMercado}` },
         { label: 'ONGs Beneficiadas', value: `${new Set(concluidas.map(tx => tx.ong)).size}` }
       ],
       history: myHistorico.map(tx => ({
@@ -741,8 +746,13 @@ export default function SupermarketView({
               const myHistorico = historico.filter(tx => tx.supermercado.toLowerCase() === user.name.toLowerCase());
               const concluidas = myHistorico.filter(tx => tx.status === 'Concluída');
               const ongsBeneficiadas = new Set(concluidas.map(tx => tx.ong)).size;
+              const canceladosMercado = alimentos.filter(
+                a => (a.status === 'Cancelado') && (!a.doador || a.doador.toLowerCase() === user.name.toLowerCase())
+              ).length;
+              const canceladosOng = myHistorico.length - concluidas.length;
+
               return (
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
                     <Heart className="w-4 h-4 text-primary fill-current" />
                     <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Concluídas</p>
@@ -750,12 +760,17 @@ export default function SupermarketView({
                   </div>
                   <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
                     <TrendingUp className="w-4 h-4 text-primary" />
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Total</p>
-                    <p className="text-xl font-black text-primary">{myHistorico.length}</p>
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Cancelados pela Ong</p>
+                    <p className="text-xl font-black text-primary">{canceladosOng}</p>
+                  </div>
+                  <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
+                    <X className="w-4 h-4 text-rose-600" />
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Cancelados por Mim</p>
+                    <p className="text-xl font-black text-rose-600">{canceladosMercado}</p>
                   </div>
                   <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
                     <Award className="w-4 h-4 text-primary" />
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">ONGs</p>
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">ONGs Atendidas</p>
                     <p className="text-xl font-black text-primary">{ongsBeneficiadas}</p>
                   </div>
                 </div>
@@ -791,11 +806,10 @@ export default function SupermarketView({
                           <td className="px-4 py-3 font-bold text-primary">{tx.quantidade}</td>
                           <td className="px-4 py-3 text-on-surface-variant">{tx.ong}</td>
                           <td className="px-4 py-3 text-right">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                              tx.status === 'Concluída'
-                                ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-200/50'
-                                : 'bg-rose-500/10 text-rose-600 border border-rose-200/50'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${tx.status === 'Concluída'
+                              ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-200/50'
+                              : 'bg-rose-500/10 text-rose-600 border border-rose-200/50'
+                              }`}>
                               {tx.status}
                             </span>
                           </td>

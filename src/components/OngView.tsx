@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { 
-  Search, 
-  MapPin, 
-  ShoppingCart, 
-  Store, 
-  ShoppingBag, 
-  Clock, 
-  Sparkles, 
+import {
+  Search,
+  MapPin,
+  ShoppingCart,
+  Store,
+  ShoppingBag,
+  Clock,
+  Sparkles,
   ArrowLeft,
   Calendar,
   Layers,
@@ -39,10 +39,10 @@ interface OngViewProps {
   historico: TransacaoHistorico[];
 }
 
-export default function OngView({ 
-  alimentos, 
-  onReservar, 
-  activeColetas, 
+export default function OngView({
+  alimentos,
+  onReservar,
+  activeColetas,
   onFinalizarColeta,
   onCancelarColeta,
   onNavigateToTab,
@@ -55,7 +55,7 @@ export default function OngView({
 }: OngViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedColeta, setSelectedColeta] = useState<ColetaAtiva | null>(null);
-  
+
   // Custom states for needs management
   const [needNome, setNeedNome] = useState('');
   const [needCategoria, setNeedCategoria] = useState(FOOD_CATEGORIES[0].id);
@@ -106,8 +106,8 @@ export default function OngView({
       userEmail: user.email,
       stats: [
         { label: 'Doações Recebidas', value: `${concluidas.length} entregas` },
-        { label: 'Supermercados Parceiros', value: `${new Set(concluidas.map(tx => tx.supermercado)).size}` },
-        { label: 'Cancelamentos', value: `${myHistorico.length - concluidas.length}` }
+        { label: 'Cancelado pela ONG', value: `${myHistorico.length - concluidas.length}` },
+        { label: 'Supermercados Parceiros', value: `${new Set(concluidas.map(tx => tx.supermercado)).size}` }
       ],
       history: myHistorico.map(tx => ({
         date: new Date(tx.dataRegistro).toLocaleDateString('pt-BR'),
@@ -141,10 +141,10 @@ export default function OngView({
       />
 
       <AnimatePresence mode="wait">
-        
+
         {/* TAB 1 & 2: NGO Active Panel (Necessidades e Matches) */}
         {activeActorTab === 'ong' && !selectedColeta && (
-          <motion.div 
+          <motion.div
             key="list"
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -201,8 +201,8 @@ export default function OngView({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2 space-y-1">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Quantidade</label>
                         <input
                           type="number"
@@ -222,10 +222,10 @@ export default function OngView({
                           onChange={(e) => setNeedUnidade(e.target.value)}
                           className="w-full h-10 px-2 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary"
                         >
-                          <option value="kg">kg</option>
-                          <option value="un">un</option>
-                          <option value="litros">l</option>
-                          <option value="pacotes">pct</option>
+                          <option value="kg">Quilogramas (Kg)</option>
+                          <option value="un">Unidade (Un)</option>
+                          <option value="litros">Litros (L)</option>
+                          <option value="pacotes">Pacotes (Pct)</option>
                         </select>
                       </div>
                     </div>
@@ -242,7 +242,7 @@ export default function OngView({
                         className="w-full h-10 px-3 bg-surface-container-low border border-outline-variant/30 rounded-lg text-xs text-on-surface focus:ring-1 focus:ring-primary"
                       />
                     </div>
-                    
+
                     <button
                       type="submit"
                       className="h-10 bg-primary text-[#161e00] rounded-lg text-xs font-bold active:scale-95 transition-all cursor-pointer shadow-sm hover:bg-opacity-95"
@@ -262,13 +262,12 @@ export default function OngView({
                     ? new Date(parsed.maxDate).getTime() - Date.now() <= 3 * 24 * 60 * 60 * 1000
                     : false;
                   return (
-                    <span 
+                    <span
                       key={idx}
-                      className={`px-3 py-1.5 border rounded-full text-xs font-semibold text-on-surface flex items-center gap-1.5 ${
-                        isNearDeadline
+                      className={`px-3 py-1.5 border rounded-full text-xs font-semibold text-on-surface flex items-center gap-1.5 ${isNearDeadline
                           ? 'bg-rose-50 border-rose-300 text-rose-700'
                           : 'bg-white border-outline-variant/40'
-                      }`}
+                        }`}
                     >
                       <span>
                         <strong>{parsed.name}</strong>
@@ -284,9 +283,8 @@ export default function OngView({
                         )}
                         {/* U5: data formatada + F5: alerta de prazo próximo */}
                         {parsed.maxDate && (
-                          <span className={`ml-1.5 text-[9px] font-bold ${
-                            isNearDeadline ? 'text-rose-600' : 'text-on-surface-variant'
-                          }`}>
+                          <span className={`ml-1.5 text-[9px] font-bold ${isNearDeadline ? 'text-rose-600' : 'text-on-surface-variant'
+                            }`}>
                             {isNearDeadline ? '⚠️ ' : ''}até {new Date(parsed.maxDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                           </span>
                         )}
@@ -322,8 +320,8 @@ export default function OngView({
               {/* Matches List */}
               <div className="space-y-4">
                 {myMatches.map((match, index) => (
-                  <div 
-                    key={index} 
+                  <div
+                    key={index}
                     className="bg-surface-container border-2 border-primary/20 rounded-2xl p-5 space-y-4 shadow-sm relative overflow-hidden"
                   >
                     {/* Header info */}
@@ -335,11 +333,10 @@ export default function OngView({
                         </h3>
                         <p className="text-[10px] text-primary font-bold uppercase tracking-wider mt-0.5 font-mono">Status: Recomendado por IA</p>
                       </div>
-                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        match.nivel_urgencia === 'Crítico' 
-                          ? 'bg-rose-500/10 text-rose-500 border border-rose-200/20' 
+                      <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${match.nivel_urgencia === 'Crítico'
+                          ? 'bg-rose-500/10 text-rose-500 border border-rose-200/20'
                           : 'bg-amber-500/10 text-amber-600 border border-amber-200/20'
-                      }`}>
+                        }`}>
                         Urgência: {match.nivel_urgencia}
                       </span>
                     </div>
@@ -365,7 +362,7 @@ export default function OngView({
                                   Cat: {item.categoria_correspondida}
                                 </span>
                                 <span className="font-extrabold text-primary">{item.quantidade}</span>
-                                
+
                                 {alOriginal && alOriginal.status === 'Pendente' ? (
                                   <button
                                     onClick={() => onReservar(alOriginal, parseFloat(item.quantidade))}
@@ -419,7 +416,7 @@ export default function OngView({
 
         {/* TAB 3: QR Code presentation (Single Item detail view) */}
         {activeActorTab === 'ong' && selectedColeta && (
-          <motion.div 
+          <motion.div
             key="qr-details"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -428,7 +425,7 @@ export default function OngView({
           >
             {/* Header with back */}
             <div id="qr-back-header" className="flex items-center gap-3">
-              <button 
+              <button
                 id="back-list-btn"
                 onClick={() => setSelectedColeta(null)}
                 className="p-2.5 bg-surface-container rounded-full hover:bg-surface-container-high transition-colors cursor-pointer"
@@ -444,10 +441,10 @@ export default function OngView({
             {/* QR Code Presentation */}
             <div id="qr-presentation-card" className="flex flex-col items-center py-8 bg-surface-container rounded-2xl border border-outline-variant/15 shadow-sm">
               <div id="qr-glow-wrapper" className="relative p-6 bg-white rounded-2xl shadow-md mb-4 border border-outline-variant/20">
-                <img 
+                <img
                   id="mock-qr-img"
-                  alt="Withdrawal QR Code" 
-                  className="w-48 h-48" 
+                  alt="Withdrawal QR Code"
+                  className="w-48 h-48"
                   src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQKYl0dYlrhA-a6sWCeaLGSiN2eyk7aDTP7vNw_5aBud8pGXfVD5Uak5hOJoeFsXGfkiSY7RP8QKuvrywFQnI1rMv6330wUrLEWiHse8INBXZ0O_rNIFMRs2uX21NMy_qNTAat53cmqAiGqxP_urRdJVNQJuxt1Pl_38oFSs72LprXihaHd44AZ0Nk8SHrU1L0UEVKcRfMk4A9lkcVgdXCgL99bn-LXD2w8cQfY6jbnLOrH15xye9R8efS_FOlSxgbaiQTE8rC4OQ"
                 />
               </div>
@@ -528,6 +525,7 @@ export default function OngView({
               const myHistorico = historico.filter(tx => tx.ong.toLowerCase() === user.name.toLowerCase());
               const concluidas = myHistorico.filter(tx => tx.status === 'Concluída');
               const supermercados = new Set(concluidas.map(tx => tx.supermercado)).size;
+              const canceladosOng = myHistorico.length - concluidas.length;
               return (
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
@@ -536,9 +534,9 @@ export default function OngView({
                     <p className="text-xl font-black text-primary">{concluidas.length}</p>
                   </div>
                   <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
-                    <Heart className="w-4 h-4 text-primary fill-current" />
-                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Total</p>
-                    <p className="text-xl font-black text-primary">{myHistorico.length}</p>
+                    <X className="w-4 h-4 text-rose-600" />
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wide mt-1">Cancelados</p>
+                    <p className="text-xl font-black text-rose-600">{canceladosOng}</p>
                   </div>
                   <div className="bg-surface-container p-4 rounded-2xl border border-outline-variant/10 space-y-1 shadow-sm">
                     <Store className="w-4 h-4 text-primary" />
@@ -578,11 +576,10 @@ export default function OngView({
                           <td className="px-4 py-3 font-bold text-primary">{tx.quantidade}</td>
                           <td className="px-4 py-3 text-on-surface-variant">{tx.supermercado}</td>
                           <td className="px-4 py-3 text-right">
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                              tx.status === 'Concluída'
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${tx.status === 'Concluída'
                                 ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-200/50'
                                 : 'bg-rose-500/10 text-rose-600 border border-rose-200/50'
-                            }`}>
+                              }`}>
                               {tx.status}
                             </span>
                           </td>
@@ -640,8 +637,8 @@ export default function OngView({
             <div className="bg-surface-container rounded-2xl border border-outline-variant/15 p-5 space-y-4 shadow-sm">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary">
-                  <img 
-                    alt="NGO Logo" 
+                  <img
+                    alt="NGO Logo"
                     className="w-full h-full object-cover"
                     src="https://lh3.googleusercontent.com/aida-public/AB6AXuAG4-Tz7fVuQ9aVkyeQvEztoGpy6KEX753m-0NGXj4GSGp7ewHfi0DsA_61Dta57L8pIAWjbzQM6MJtJj3IjW5zkZK-uiIyV0R7cthVoKORFSQdj8Mn852XhJ3ef39GftkHySJ_G-v8lB_lSur9Y2lkRfNXrezecDdGskhS3jMsgpX9EyUbUJFC-RIK9Gt2LB8pXIDiWf60SgqSY0Az7jLCS6kwWkXwLTnkTyBJX3SzaSIa3WEBPlGj0aPfcyl2M2tuRV7HWBq_9rc"
                   />
