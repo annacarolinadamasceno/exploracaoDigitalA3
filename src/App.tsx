@@ -25,6 +25,7 @@ import {
   fetchAlimentos,
   seedAlimentos,
   insertAlimento,
+  deleteAlimento,
   updateAlimentoStatus,
   updateAlimentoQuantidade,
   fetchColetasAtivas,
@@ -112,6 +113,13 @@ export default function App() {
 
   // Transaction history state
   const [historico, setHistorico] = useState<TransacaoHistorico[]>([]);
+
+  // Error toast state
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+  const showError = (msg: string) => {
+    setErrorToast(msg);
+    setTimeout(() => setErrorToast(null), 4000);
+  };
 
   // ---------------------------------------------------------------------------
   // Initial data load from Supabase on mount
@@ -353,9 +361,17 @@ export default function App() {
     if (saved) {
       setAlimentos(prev => [saved, ...prev]);
     } else {
-      // Fallback local if DB fails
-      const fallback: Alimento = { ...withMeta, id: `alimento_${Date.now()}` };
-      setAlimentos(prev => [fallback, ...prev]);
+      showError('Erro ao salvar no banco de dados. Verifique sua conexão e tente novamente.');
+    }
+  };
+
+  // Supermarket cancels a pending donation — deletes from DB
+  const handleCancelarAlimento = async (alimentoId: string) => {
+    const ok = await deleteAlimento(alimentoId);
+    if (ok) {
+      setAlimentos(prev => prev.filter(a => a.id !== alimentoId));
+    } else {
+      showError('Não foi possível cancelar a doação. Tente novamente.');
     }
   };
 
@@ -399,6 +415,12 @@ export default function App() {
 
   return (
     <div id="app-viewport" className="min-h-screen bg-[#f3f4f6] text-on-surface flex flex-col items-center">
+      {/* Global Error Toast */}
+      {errorToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] bg-rose-600 text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 animate-fadeIn max-w-sm">
+          <span>⚠️ {errorToast}</span>
+        </div>
+      )}
       {/* Container wrapper mimicking clean mobile bento proportions */}
       <div id="mobile-container-frame" className="w-full max-w-2xl bg-white min-h-screen shadow-lg relative flex flex-col pb-32 border-x border-outline-variant">
         
@@ -473,6 +495,7 @@ export default function App() {
             <SupermarketView 
               alimentos={alimentos}
               onAddAlimento={handleAddAlimento}
+              onCancelarAlimento={handleCancelarAlimento}
               user={user}
               activeColetas={activeColetas}
               onFinalizarColeta={handleFinalizarColeta}

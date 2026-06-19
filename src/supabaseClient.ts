@@ -251,6 +251,21 @@ export async function updateAlimentoQuantidade(
   if (error) console.error('updateAlimentoQuantidade error:', error.message);
 }
 
+/** Remove um alimento do banco (cancelamento pelo supermercado). */
+export async function deleteAlimento(id: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('doacoes_supermercado')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('deleteAlimento error:', error.message);
+    return false;
+  }
+  return true;
+}
+
+
 // ---------------------------------------------------------------------------
 // CRUD — Coletas Ativas (coletas_ativas)
 // ---------------------------------------------------------------------------

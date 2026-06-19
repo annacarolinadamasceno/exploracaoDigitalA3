@@ -63,12 +63,12 @@ export default function OngView({
   const [needDataMaxima, setNeedDataMaxima] = useState('');
   const [showAddNeedForm, setShowAddNeedForm] = useState(false);
 
-  // Find this NGO's record in state to show their active registered needs
-  const currentOng = ongs.find(o => o.nome.toLowerCase() === user.name.toLowerCase()) || ongs[0];
+  // B4: fallback seguro — não usar ongs[0] para evitar pegar ONG errada
+  const currentOng = ongs.find(o => o.nome.toLowerCase() === user.name.toLowerCase()) ?? null;
   const necessidades = currentOng ? currentOng.necessidades : [];
 
-  // Filter matches dynamically to show only the ones generated for THIS NGO
-  const myMatches = matches.filter(m => m.nome_ong.toLowerCase() === user.name.toLowerCase());
+  // B7: nullcheck para evitar erro se nome_ong for undefined
+  const myMatches = matches.filter(m => m?.nome_ong?.toLowerCase() === user.name.toLowerCase());
 
   const handleAddNeed = (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,7 +139,7 @@ export default function OngView({
                 <button
                   id="add-need-btn"
                   onClick={() => setShowAddNeedForm(!showAddNeedForm)}
-                  className="bg-primary/20 text-[#856404] hover:bg-primary/30 border border-primary/30 p-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  className="bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30 p-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                 >
                   <PlusCircle className="w-4 h-4 text-primary" />
                   <span>Cadastrar</span>
@@ -235,21 +235,37 @@ export default function OngView({
               <div className="flex flex-wrap gap-2 pt-1">
                 {necessidades.map((need, idx) => {
                   const parsed = parseNeed(need);
+                  // F5: verifica se prazo está próximo
+                  const isNearDeadline = parsed.maxDate
+                    ? new Date(parsed.maxDate).getTime() - Date.now() <= 3 * 24 * 60 * 60 * 1000
+                    : false;
                   return (
                     <span 
                       key={idx}
-                      className="px-3 py-1.5 bg-white border border-outline-variant/40 rounded-full text-xs font-semibold text-on-surface flex items-center gap-1.5"
+                      className={`px-3 py-1.5 border rounded-full text-xs font-semibold text-on-surface flex items-center gap-1.5 ${
+                        isNearDeadline
+                          ? 'bg-rose-50 border-rose-300 text-rose-700'
+                          : 'bg-white border-outline-variant/40'
+                      }`}
                     >
                       <span>
                         <strong>{parsed.name}</strong>
                         {parsed.category && (
-                          <span className="text-[9px] bg-primary/20 text-[#856404] px-1.5 py-0.5 rounded ml-1.5">
+                          <span className="text-[9px] bg-primary/20 text-primary px-1.5 py-0.5 rounded ml-1.5">
                             {parsed.category}
                           </span>
                         )}
                         {parsed.qty && (
                           <span className="text-on-surface-variant ml-1.5">
                             - {parsed.qty} {parsed.unit}
+                          </span>
+                        )}
+                        {/* U5: data formatada + F5: alerta de prazo próximo */}
+                        {parsed.maxDate && (
+                          <span className={`ml-1.5 text-[9px] font-bold ${
+                            isNearDeadline ? 'text-rose-600' : 'text-on-surface-variant'
+                          }`}>
+                            {isNearDeadline ? '⚠️ ' : ''}até {new Date(parsed.maxDate + 'T12:00:00').toLocaleDateString('pt-BR')}
                           </span>
                         )}
                       </span>

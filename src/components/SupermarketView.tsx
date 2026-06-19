@@ -16,7 +16,9 @@ import {
   FileText,
   Camera,
   Store,
-  UserCheck
+  UserCheck,
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Alimento, ColetaAtiva, TransacaoHistorico } from '../types';
@@ -26,6 +28,7 @@ import { FOOD_CATEGORIES } from '../categories';
 interface SupermarketViewProps {
   alimentos: Alimento[];
   onAddAlimento: (item: Omit<Alimento, 'id' | 'status'>) => void;
+  onCancelarAlimento: (alimentoId: string) => void;
   // Auth and new tab state integration props
   user: { name: string; email: string };
   activeColetas: ColetaAtiva[];
@@ -35,9 +38,51 @@ interface SupermarketViewProps {
   historico: TransacaoHistorico[];
 }
 
+/** Formata data ISO para o locale pt-BR */
+function formatDate(dateStr: string): string {
+  if (!dateStr || dateStr === 'Hoje') return 'Hoje';
+  try {
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR');
+  } catch {
+    return dateStr;
+  }
+}
+
+/** Retorna o ícone da categoria a partir de FOOD_CATEGORIES */
+function getCategoryIcon(categoria: string): string {
+  const found = FOOD_CATEGORIES.find(
+    c => c.id.toLowerCase() === categoria.toLowerCase() || c.label.toLowerCase() === categoria.toLowerCase()
+  );
+  return found?.icone ?? '📦';
+}
+
+/** Retorna classes CSS para o badge de status */
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case 'Aguardando Coleta':
+      return 'bg-amber-50 border-amber-200 text-amber-700';
+    case 'Coletado':
+      return 'bg-emerald-50 border-emerald-200 text-emerald-700';
+    default: // Pendente
+      return 'bg-slate-100 border-slate-300 text-slate-600';
+  }
+}
+
+/** Verifica se a validade está próxima (≤ 3 dias) */
+function isExpiringSoon(dateStr: string): boolean {
+  if (!dateStr || dateStr === 'Hoje') return true;
+  try {
+    const diff = new Date(dateStr).getTime() - Date.now();
+    return diff >= 0 && diff <= 3 * 24 * 60 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
 export default function SupermarketView({
   alimentos,
   onAddAlimento,
+  onCancelarAlimento,
   user,
   activeColetas,
   onFinalizarColeta,
@@ -83,10 +128,13 @@ export default function SupermarketView({
     e.preventDefault();
     if (!nome) return;
 
+    // B6: usar data ISO real como fallback
+    const validadeReal = validade || new Date().toISOString().split('T')[0];
+
     onAddAlimento({
       nome,
       categoria,
-      validade: validade || 'Hoje',
+      validade: validadeReal,
       quantidade: quantidade || 1,
       unidade: unidade.replace(/\s*\(.*\)/, '').toLowerCase(), // clean unit name
     });
@@ -109,6 +157,13 @@ export default function SupermarketView({
   const handleAddAnother = () => {
     setShowSuccess(false);
     setShowFullForm(true);
+  };
+
+  // F1: Cancel a pending donation with confirmation
+  const handleCancelarDoacao = (item: Alimento) => {
+    if (window.confirm(`Cancelar a doação de "${item.nome}"?\n\nO item será removido permanentemente do sistema.`)) {
+      onCancelarAlimento(item.id);
+    }
   };
 
   // Simulating QR Code Scanning action
@@ -381,6 +436,20 @@ export default function SupermarketView({
                         />
                       </div>
 
+                      {/* F3: Categoria também no drawer rápido */}
+                      <div>
+                        <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Categoria</label>
+                        <select
+                          value={categoria}
+                          onChange={(e) => setCategoria(e.target.value)}
+                          className="w-full h-12 px-4 rounded-xl bg-surface-container border border-outline-variant/20 focus:ring-2 focus:ring-primary text-sm text-on-surface"
+                        >
+                          {FOOD_CATEGORIES.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.icone} {cat.label}</option>
+                          ))}
+                        </select>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-1.5">Validade</label>
@@ -462,7 +531,8 @@ export default function SupermarketView({
                     className="bg-white border border-outline-variant/30 p-4 rounded-xl flex items-center justify-between shadow-xs"
                   >
                     <div>
-                      <p className="text-xs font-bold text-primary">{coleta.supermercado}</p>
+                      {/* U6: mostrar nome da ONG, não do supermercado */}
+                      <p className="text-xs font-bold text-primary">{coleta.nomeOng || coleta.supermercado}</p>
                       <p className="text-[10px] text-on-surface-variant mt-0.5">
                         Itens: <span className="font-semibold">{coleta.itens.map(i => `${i.quantidade} de ${i.nome}`).join(', ')}</span>
                       </p>
@@ -497,7 +567,8 @@ export default function SupermarketView({
                     <div className="flex justify-between items-center pb-2 border-b border-outline-variant/10">
                       <div>
                         <h3 className="text-base font-bold text-on-surface">Validar QR Code de Retirada</h3>
-                        <p className="text-[10px] text-on-surface-variant">ONG: {activeScanningColeta.supermercado} • Pedido #{activeScanningColeta.pedidoId}</p>
+                        {/* B1: mostrar nomeOng corretamente */}
+                        <p className="text-[10px] text-on-surface-variant">ONG: {activeScanningColeta.nomeOng || activeScanningColeta.supermercado} • Pedido #{activeScanningColeta.pedidoId}</p>
                       </div>
                       <button
                         onClick={() => setActiveScanningColeta(null)}
@@ -560,50 +631,69 @@ export default function SupermarketView({
             <div id="active-donations-section" className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-bold text-on-surface">Minhas Doações Cadastradas</h2>
-                <span className="text-xs font-bold text-primary cursor-pointer hover:underline">Ver Tudo ({myAlimentos.length})</span>
+                <span className="text-xs font-semibold text-on-surface-variant bg-surface-container border border-outline-variant/20 px-2.5 py-0.5 rounded-full">
+                  {myAlimentos.length} {myAlimentos.length === 1 ? 'item' : 'itens'}
+                </span>
               </div>
 
               <div className="space-y-3">
+                {myAlimentos.length === 0 && (
+                  <div className="bg-surface-container rounded-xl p-8 text-center border border-outline-variant/10">
+                    <p className="text-xs text-on-surface-variant/60 italic">Nenhuma doação cadastrada ainda. Clique em "Formulário de Nova Doação" para começar!</p>
+                  </div>
+                )}
                 {myAlimentos.map((item) => {
-                  let icon = '📦';
-                  if (item.categoria.toLowerCase() === 'padaria') icon = '🥖';
-                  else if (item.categoria.toLowerCase() === 'frutas') icon = '🍎';
-                  else if (item.categoria.toLowerCase() === 'laticínios') icon = '🥛';
-                  else if (item.categoria.toLowerCase() === 'proteína animal') icon = '🥚';
-                  else if (item.categoria.toLowerCase() === 'bebidas') icon = '🥤';
-                  else if (item.categoria.toLowerCase() === 'enlatados') icon = '🥫';
+                  // B3: Ícone via FOOD_CATEGORIES
+                  const icon = getCategoryIcon(item.categoria);
+                  const expiring = isExpiringSoon(item.validade);
 
                   return (
                     <div
                       key={item.id}
-                      className="bg-surface-container p-4 rounded-xl flex items-center justify-between border border-outline-variant/10 shadow-sm"
+                      className={`bg-surface-container p-4 rounded-xl border shadow-sm transition-all ${expiring && item.status === 'Pendente' ? 'border-amber-300/60' : 'border-outline-variant/10'}`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center text-2xl border border-outline-variant/20 shadow-xs">
-                          {icon}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-12 h-12 rounded-lg bg-surface-container-highest flex items-center justify-center text-2xl border border-outline-variant/20 shadow-xs shrink-0">
+                            {icon}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-on-surface truncate">{item.nome}</p>
+                            <p className="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1 flex-wrap">
+                              <span>Qtd: {item.quantidade} {item.unidade}</span>
+                              <span className="text-outline-variant">•</span>
+                              {/* U5: data formatada em pt-BR */}
+                              <span className={expiring && item.status === 'Pendente' ? 'text-amber-600 font-semibold' : ''}>
+                                Venc: {formatDate(item.validade)}
+                                {expiring && item.status === 'Pendente' && ' ⚠️'}
+                              </span>
+                            </p>
+                            {/* F2: mostrar quem reservou */}
+                            {item.status === 'Aguardando Coleta' && (
+                              <p className="text-[10px] text-amber-700 font-semibold mt-0.5">
+                                Reservado por ONG
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-semibold text-on-surface">{item.nome}</p>
-                          <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
-                            Qtd: {item.quantidade} {item.unidade} • Venc: {item.validade}
-                          </p>
-                        </div>
-                      </div>
 
-                      <div>
-                        {item.status === 'Aguardando Coleta' ? (
-                          <span className="px-2.5 py-1 rounded-full bg-primary-container/20 border border-primary/30 text-[10px] font-bold text-primary uppercase whitespace-nowrap">
-                            Aguardando Coleta
+                        <div className="flex items-center gap-2 ml-2 shrink-0">
+                          {/* U2/U3: badges padronizadas */}
+                          <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase whitespace-nowrap ${statusBadgeClass(item.status)}`}>
+                            {item.status === 'Aguardando Coleta' ? 'Ag. Coleta' : item.status}
                           </span>
-                        ) : item.status === 'Coletado' ? (
-                          <span className="px-2.5 py-1 rounded-full bg-surface-container-highest border border-outline-variant/30 text-[10px] font-bold text-on-surface-variant uppercase whitespace-nowrap">
-                            Coletado
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-[10px] font-bold text-amber-600 uppercase whitespace-nowrap">
-                            Pendente
-                          </span>
-                        )}
+
+                          {/* F1: Botão cancelar apenas para itens Pendentes */}
+                          {item.status === 'Pendente' && (
+                            <button
+                              onClick={() => handleCancelarDoacao(item)}
+                              title="Cancelar doação"
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-600 rounded-lg transition-colors cursor-pointer active:scale-95"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
